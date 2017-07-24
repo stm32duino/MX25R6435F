@@ -1,0 +1,42 @@
+#######################################
+# Syntax Coloring Map MX25R6435F
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+MX25R6435F	KEYWORD
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+begin	KEYWORD2
+end	KEYWORD2
+write	KEYWORD2
+read	KEYWORD2
+mapped	KEYWORD2
+erase	KEYWORD2
+eraseSector	KEYWORD2
+eraseChip	KEYWORD2
+suspendErase	KEYWORD2
+resumeErase	KEYWORD2
+sleep	KEYWORD2
+wakeup	KEYWORD2
+status	KEYWORD2
+info	KEYWORD2
+length	KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+MEMORY_SIZE	LITERAL1
+MEMORY_SECTOR_SIZE	LITERAL1
+MEMORY_SECTOR_NUMBER	LITERAL1
+MEMORY_PAGE_SIZE	LITERAL1
+MEMORY_PAGE_NUMBER	LITERAL1
+MEMORY_OK	LITERAL1
+MEMORY_ERROR	LITERAL1
+MEMORY_BUSY	LITERAL1
+MEMORY_NOT_SUPPORTED	LITERAL1
+MEMORY_SUSPENDED	LITERAL1
