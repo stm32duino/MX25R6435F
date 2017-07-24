@@ -1,11 +1,11 @@
 /**
   ******************************************************************************
-  * @file    stm32l475e_iot01_qspi.h
+  * @file    mx25r6435f_driver.h
   * @author  MCD Application Team
   * @version V1.1.0
   * @date    21-April-2017
   * @brief   This file contains the common defines and functions prototypes for
-  *          the stm32l475e_iot01_qspi.c driver.
+  *          the mx25r6435f_driver.c driver.
   ******************************************************************************
   * @attention
   *
@@ -37,16 +37,21 @@
   */
 
 /* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef __STM32L475E_IOT01_QSPI_H
-#define __STM32L475E_IOT01_QSPI_H
+#ifndef _MX25R6435F_DRIVER_H
+#define _MX25R6435F_DRIVER_H
 
 #ifdef __cplusplus
  extern "C" {
-#endif 
+#endif
 
 /* Includes ------------------------------------------------------------------*/
-#include "stm32l4xx_hal.h"
-#include "../Components/mx25r6435f/mx25r6435f.h"
+#include "stm32_def.h"
+#include "mx25r6435f_desc.h"
+
+/* Checks if QSPI available */
+#ifndef QUADSPI
+#error "QSPI not available. MX25R6435F library compilation failed."
+#endif
 
 /** @addtogroup BSP
   * @{
@@ -60,7 +65,7 @@
   * @{
   */
 
-/* Exported constants --------------------------------------------------------*/ 
+/* Exported constants --------------------------------------------------------*/
 /** @defgroup STM32L475E_IOT01_QSPI_Exported_Constants QSPI Exported Constants
   * @{
   */
@@ -133,6 +138,6 @@ void BSP_QSPI_MspDeInit(void);
 }
 #endif
 
-#endif /* __STM32L475E_IOT01_QSPI_H */
+#endif /* _MX25R6435F_DRIVER_H */
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
