@@ -6,7 +6,7 @@
 # Datatypes (KEYWORD1)
 #######################################
 
-MX25R6435F	KEYWORD
+MX25R6435F	KEYWORD1
 
 #######################################
 # Methods and Functions (KEYWORD2)
