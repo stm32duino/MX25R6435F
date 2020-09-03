@@ -48,10 +48,16 @@
 #include "stm32_def.h"
 #include "mx25r6435f_desc.h"
 
+#if defined(OCTOSPI1)
+#define OCTOSPI OCTOSPI1
+#elif defined(OCTOSPI2)
+#define OCTOSPI OCTOSPI2
+#else
 /* Checks if QSPI available */
 #ifndef QUADSPI
 #error "QSPI not available. MX25R6435F library compilation failed."
-#endif
+#endif /* QSPI */
+#endif /* OSPI */
 
 /** @addtogroup BSP
   * @{
