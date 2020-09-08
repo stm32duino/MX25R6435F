@@ -39,7 +39,27 @@
 #ifndef _MX25R6435F_H_
 #define _MX25R6435F_H_
 
+#include "Arduino.h"
 #include "mx25r6435f_driver.h"
+
+#ifndef MX25R6435F_D0
+#define MX25R6435F_D0           NC
+#endif
+#ifndef MX25R6435F_D1
+#define MX25R6435F_D1           NC
+#endif
+#ifndef MX25R6435F_D2
+#define MX25R6435F_D2           NC
+#endif
+#ifndef MX25R6435F_D3
+#define MX25R6435F_D3           NC
+#endif
+#ifndef MX25R6435F_SCLK
+#define MX25R6435F_SCLK         NC
+#endif
+#ifndef MX25R6435F_SSEL
+#define MX25R6435F_SSEL         NC
+#endif
 
 /* Memory configuration paremeters */
 typedef enum {
@@ -65,8 +85,41 @@ class MX25R6435FClass
   public:
     MX25R6435FClass();
 
+    // setDx/SCLK/SSEL have to be called before begin()
+    void setDx(uint32_t data0, uint32_t data1, uint32_t data2, uint32_t data3)
+    {
+      _qspi.pin_d0 = digitalPinToPinName(data0);
+      _qspi.pin_d1 = digitalPinToPinName(data1);
+      _qspi.pin_d2 = digitalPinToPinName(data2);
+      _qspi.pin_d3 = digitalPinToPinName(data3);
+    };
+    void setSCLK(uint32_t sclk)
+    {
+      _qspi.pin_sclk = digitalPinToPinName(sclk);
+    };
+    void setSSEL(uint32_t ssel)
+    {
+      _qspi.pin_ssel = digitalPinToPinName(ssel);
+    };
+
+    void setDx(PinName data0, PinName data1, PinName data2, PinName data3)
+    {
+      _qspi.pin_d0 = (data0);
+      _qspi.pin_d1 = (data1);
+      _qspi.pin_d2 = (data2);
+      _qspi.pin_d3 = (data3);
+    };
+    void setSCLK(PinName sclk)
+    {
+      _qspi.pin_sclk = (sclk);
+    };
+    void setSSEL(PinName ssel)
+    {
+      _qspi.pin_ssel = (ssel);
+    };
+
     /* Initializes the memory interface. */
-    void begin(void);
+    void begin(uint8_t data0 = MX25R6435F_D0, uint8_t data1 = MX25R6435F_D1, uint8_t data2 = MX25R6435F_D2, uint8_t data3 = MX25R6435F_D3, uint8_t sclk = MX25R6435F_SCLK, uint8_t ssel = MX25R6435F_SSEL);
 
     /* De-Initializes the memory interface. */
     void end(void);
@@ -174,6 +227,7 @@ class MX25R6435FClass
 
   private:
     uint8_t initDone;
+    QSPI_t _qspi;
 };
 
 extern MX25R6435FClass MX25R6435F;

@@ -26,6 +26,9 @@ wakeup	KEYWORD2
 status	KEYWORD2
 info	KEYWORD2
 length	KEYWORD2
+setDx KEYWORD2
+setSCLK KEYWORD2
+setSSEL KEYWORD2
 
 #######################################
 # Constants (LITERAL1)

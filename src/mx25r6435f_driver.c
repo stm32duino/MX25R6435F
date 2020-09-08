@@ -79,8 +79,8 @@
 #endif
 
 /* Includes ------------------------------------------------------------------*/
+#include "core_debug.h"
 #include "mx25r6435f_driver.h"
-#include "PeripheralPins.h"
 
 /** @addtogroup BSP
   * @{
@@ -111,15 +111,7 @@
 /** @defgroup STM32L475E_IOT01_QSPI_Private_Variables QSPI Private Variables
   * @{
   */
-#ifdef OCTOSPI
-OSPI_HandleTypeDef OSPIHandle;
-#define XSPI_HandleTypeDef OSPI_HandleTypeDef
-#define hxspi hospi
-#else
-QSPI_HandleTypeDef QSPIHandle;
-#define XSPI_HandleTypeDef QSPI_HandleTypeDef
-#define hxspi hqspi
-#endif /* OCTOSPI */
+
 /**
   * @}
   */
@@ -166,155 +158,145 @@ static uint8_t qspi_setClockPrescaler(void) {
 
 /**
   * @brief  Initializes the QSPI interface.
+  * @param  obj : pointer to QSPI_t structure
   * @retval QSPI memory status
   */
-uint8_t BSP_QSPI_Init(void)
+uint8_t BSP_QSPI_Init(QSPI_t *obj)
 {
-#ifdef OCTOSPI
-  OSPIHandle.Instance = OCTOSPI;
+  if (obj == NULL) {
+    return QSPI_ERROR;
+  }
+  XSPI_HandleTypeDef *handle = &(obj->handle);
+
+  /* Determine the XSPI to use */
+  XSPI_TypeDef *xspi_d0 = pinmap_peripheral(obj->pin_d0, PinMap_XSPI_DATA0);
+  XSPI_TypeDef *xspi_d1 = pinmap_peripheral(obj->pin_d1, PinMap_XSPI_DATA1);
+  XSPI_TypeDef *xspi_d2 = pinmap_peripheral(obj->pin_d2, PinMap_XSPI_DATA2);
+  XSPI_TypeDef *xspi_d3 = pinmap_peripheral(obj->pin_d3, PinMap_XSPI_DATA3);
+
+  XSPI_TypeDef *xspi_sclk = pinmap_peripheral(obj->pin_sclk, PinMap_XSPI_SCLK);
+  XSPI_TypeDef *xspi_ssel = pinmap_peripheral(obj->pin_ssel, PinMap_XSPI_SSEL);
+
+  /* Pins Dx/SSEL/SCLK must not be NP. */
+  if (xspi_d0 == NP || xspi_d1 == NP || xspi_d2 == NP || xspi_sclk == NP || xspi_ssel == NP) {
+    core_debug("ERROR: at least one QSPI pin has no peripheral\n");
+    return QSPI_ERROR;
+  }
+
+  XSPI_TypeDef *spi_d01 = pinmap_merge_peripheral(xspi_d0, xspi_d1);
+  XSPI_TypeDef *spi_d23 = pinmap_merge_peripheral(xspi_d2, xspi_d3);
+  XSPI_TypeDef *spi_dx = pinmap_merge_peripheral(spi_d01, spi_d23);
+  XSPI_TypeDef *spi_sxxx = pinmap_merge_peripheral(xspi_sclk, xspi_ssel);
+
+  obj->qspi = pinmap_merge_peripheral(spi_dx, spi_sxxx);
+
+  /* Are all pins connected to the same SPI instance? */
+  if (obj->qspi == NP) {
+    core_debug("ERROR: QSPI pins mismatch\n");
+    return QSPI_ERROR;
+  }
+
+
+  handle->Instance = obj->qspi;
 
   /* Call the DeInit function to reset the driver */
-  if (HAL_OSPI_DeInit(&OSPIHandle) != HAL_OK)
-#else
-  QSPIHandle.Instance = QUADSPI;
-
-  /* Call the DeInit function to reset the driver */
-  if (HAL_QSPI_DeInit(&QSPIHandle) != HAL_OK)
-#endif /* OCTOSPI */
-  {
+  if (HAL_XSPI_DeInit(handle) != HAL_OK) {
     return QSPI_ERROR;
   }
 
   /* System level initialization */
-  BSP_QSPI_MspInit();
+  BSP_QSPI_MspInit(obj);
 
 #ifdef OCTOSPI
   /* OSPI initialization */
-  OSPIHandle.Init.FifoThreshold         = 4;
-  OSPIHandle.Init.DualQuad              = HAL_OSPI_DUALQUAD_DISABLE;
-  OSPIHandle.Init.MemoryType            = HAL_OSPI_MEMTYPE_MACRONIX;
-  OSPIHandle.Init.DeviceSize            = POSITION_VAL(MX25R6435F_FLASH_SIZE);
-  OSPIHandle.Init.ChipSelectHighTime    = 1;
-  OSPIHandle.Init.FreeRunningClock      = HAL_OSPI_FREERUNCLK_DISABLE;
-  OSPIHandle.Init.ClockMode             = HAL_OSPI_CLOCK_MODE_0;
-  OSPIHandle.Init.ClockPrescaler        = 4; /* QSPI clock = 110MHz / ClockPrescaler = 27.5 MHz */
-  OSPIHandle.Init.SampleShifting        = HAL_OSPI_SAMPLE_SHIFTING_NONE;
-  OSPIHandle.Init.DelayHoldQuarterCycle = HAL_OSPI_DHQC_ENABLE;
-  OSPIHandle.Init.ChipSelectBoundary    = 0;
-  OSPIHandle.Init.DelayBlockBypass      = HAL_OSPI_DELAY_BLOCK_USED;
-
-  if (HAL_OSPI_Init(&OSPIHandle) != HAL_OK)
-  {
-    return QSPI_ERROR;
-  }
-
-  /* QSPI memory reset */
-  if (QSPI_ResetMemory(&OSPIHandle) != QSPI_OK)
-  {
-    return QSPI_NOT_SUPPORTED;
-  }
-
-  /* QSPI quad enable */
-  if (QSPI_QuadMode(&OSPIHandle, QSPI_QUAD_ENABLE) != QSPI_OK)
-  {
-    return QSPI_ERROR;
-  }
-
-  /* High performance mode enable */
-  if (QSPI_HighPerfMode(&OSPIHandle, QSPI_HIGH_PERF_ENABLE) != QSPI_OK)
-  {
-    return QSPI_ERROR;
-  }
-
-  /* Re-configure the clock for the high performance mode */
-  OSPIHandle.Init.ClockPrescaler = 2; /* QSPI clock = 110MHz / ClockPrescaler = 55 MHz */
-
-  if (HAL_OSPI_Init(&OSPIHandle) != HAL_OK)
-  {
-    return QSPI_ERROR;
-  }
+  handle->Init.FifoThreshold         = 4;
+  handle->Init.DualQuad              = HAL_OSPI_DUALQUAD_DISABLE;
+  handle->Init.MemoryType            = HAL_OSPI_MEMTYPE_MACRONIX;
+  handle->Init.DeviceSize            = POSITION_VAL(MX25R6435F_FLASH_SIZE);
+  handle->Init.ChipSelectHighTime    = 1;
+  handle->Init.FreeRunningClock      = HAL_OSPI_FREERUNCLK_DISABLE;
+  handle->Init.ClockMode             = HAL_OSPI_CLOCK_MODE_0;
+  handle->Init.ClockPrescaler        = 4; /* QSPI clock = 110MHz / ClockPrescaler = 27.5 MHz */
+  handle->Init.SampleShifting        = HAL_OSPI_SAMPLE_SHIFTING_NONE;
+  handle->Init.DelayHoldQuarterCycle = HAL_OSPI_DHQC_ENABLE;
+  handle->Init.ChipSelectBoundary    = 0;
+  handle->Init.DelayBlockBypass      = HAL_OSPI_DELAY_BLOCK_USED;
 #else /* OCTOSPI */
-   /* QSPI initialization */
+  /* QSPI initialization */
   /* High performance mode clock is limited to 80 MHz */
-  QSPIHandle.Init.ClockPrescaler     = qspi_setClockPrescaler() + 1; /* QSPI clock = systemCoreClock / (ClockPrescaler+1) */
-  QSPIHandle.Init.FifoThreshold      = 4;
-  QSPIHandle.Init.SampleShifting     = QSPI_SAMPLE_SHIFTING_NONE;
-  QSPIHandle.Init.FlashSize          = POSITION_VAL(MX25R6435F_FLASH_SIZE) - 1;
-  QSPIHandle.Init.ChipSelectHighTime = QSPI_CS_HIGH_TIME_1_CYCLE;
-  QSPIHandle.Init.ClockMode          = QSPI_CLOCK_MODE_0;
+  handle->Init.ClockPrescaler     = qspi_setClockPrescaler() + 1; /* QSPI clock = systemCoreClock / (ClockPrescaler+1) */
+  handle->Init.FifoThreshold      = 4;
+  handle->Init.SampleShifting     = QSPI_SAMPLE_SHIFTING_NONE;
+  handle->Init.FlashSize          = POSITION_VAL(MX25R6435F_FLASH_SIZE) - 1;
+  handle->Init.ChipSelectHighTime = QSPI_CS_HIGH_TIME_1_CYCLE;
+  handle->Init.ClockMode          = QSPI_CLOCK_MODE_0;
+#endif
 
-  if (HAL_QSPI_Init(&QSPIHandle) != HAL_OK)
-  {
+  if (HAL_XSPI_Init(handle) != HAL_OK) {
     return QSPI_ERROR;
   }
 
   /* QSPI memory reset */
-  if (QSPI_ResetMemory(&QSPIHandle) != QSPI_OK)
-  {
+  if (QSPI_ResetMemory(handle) != QSPI_OK) {
     return QSPI_NOT_SUPPORTED;
   }
 
   /* QSPI quad enable */
-  if (QSPI_QuadMode(&QSPIHandle, QSPI_QUAD_ENABLE) != QSPI_OK)
-  {
+  if (QSPI_QuadMode(handle, QSPI_QUAD_ENABLE) != QSPI_OK) {
     return QSPI_ERROR;
   }
 
   /* High performance mode enable */
-  if (QSPI_HighPerfMode(&QSPIHandle, QSPI_HIGH_PERF_ENABLE) != QSPI_OK)
-  {
+  if (QSPI_HighPerfMode(handle, QSPI_HIGH_PERF_ENABLE) != QSPI_OK) {
     return QSPI_ERROR;
   }
 
   /* Re-configure the clock for the high performance mode */
   /* High performance mode clock is limited to 80 MHz */
-  QSPIHandle.Init.ClockPrescaler = qspi_setClockPrescaler(); /* QSPI clock = systemCoreClock / (ClockPrescaler+1) */
+  handle->Init.ClockPrescaler = qspi_setClockPrescaler(); /* QSPI clock = systemCoreClock / (ClockPrescaler+1) */
 
-  if (HAL_QSPI_Init(&QSPIHandle) != HAL_OK)
-  {
+  if (HAL_XSPI_Init(handle) != HAL_OK) {
     return QSPI_ERROR;
   }
-#endif /* OCTOSPI */
+
+  if (HAL_XSPI_Init(handle) != HAL_OK) {
+    return QSPI_ERROR;
+  }
 
   return QSPI_OK;
 }
 
 /**
   * @brief  De-Initializes the QSPI interface.
+  * @param  obj : pointer to QSPI_t structure
   * @retval QSPI memory status
   */
-uint8_t BSP_QSPI_DeInit(void)
+uint8_t BSP_QSPI_DeInit(QSPI_t *obj)
 {
-#ifdef OCTOSPI
-  OSPIHandle.Instance = OCTOSPI;
+  XSPI_HandleTypeDef *handle = &(obj->handle);
 
   /* Call the DeInit function to reset the driver */
-  if (HAL_OSPI_DeInit(&OSPIHandle) != HAL_OK)
-#else /* OCTOSPI */
-  QSPIHandle.Instance = QUADSPI;
-
-  /* Call the DeInit function to reset the driver */
-  if (HAL_QSPI_DeInit(&QSPIHandle) != HAL_OK)
-#endif /* OCTOSPI */
-  {
+  if (HAL_XSPI_DeInit(handle) != HAL_OK) {
     return QSPI_ERROR;
   }
 
   /* System level De-initialization */
-  BSP_QSPI_MspDeInit();
+  BSP_QSPI_MspDeInit(obj);
 
   return QSPI_OK;
 }
 
 /**
   * @brief  Reads an amount of data from the QSPI memory.
+  * @param  obj : pointer to QSPI_t structure
   * @param  pData    : Pointer to data to be read
   * @param  ReadAddr : Read start address
   * @param  Size     : Size of data to read
   * @retval QSPI memory status
   */
-uint8_t BSP_QSPI_Read(uint8_t* pData, uint32_t ReadAddr, uint32_t Size)
+uint8_t BSP_QSPI_Read(QSPI_t *obj, uint8_t* pData, uint32_t ReadAddr, uint32_t Size)
 {
+  XSPI_HandleTypeDef *handle = &(obj->handle);
 #ifdef OCTOSPI
   OSPI_RegularCmdTypeDef sCommand;
 
@@ -339,15 +321,15 @@ uint8_t BSP_QSPI_Read(uint8_t* pData, uint32_t ReadAddr, uint32_t Size)
   sCommand.DummyCycles           = MX25R6435F_DUMMY_CYCLES_READ_QUAD;
   sCommand.DQSMode               = HAL_OSPI_DQS_DISABLE;
   sCommand.SIOOMode              = HAL_OSPI_SIOO_INST_EVERY_CMD;
-  
+
   /* Configure the command */
-  if (HAL_OSPI_Command(&OSPIHandle, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_OSPI_Command(handle, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
-  
+
   /* Reception of the data */
-  if (HAL_OSPI_Receive(&OSPIHandle, pData, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_OSPI_Receive(handle, pData, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
@@ -371,13 +353,13 @@ uint8_t BSP_QSPI_Read(uint8_t* pData, uint32_t ReadAddr, uint32_t Size)
   sCommand.SIOOMode           = QSPI_SIOO_INST_EVERY_CMD;
 
   /* Configure the command */
-  if (HAL_QSPI_Command(&QSPIHandle, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_QSPI_Command(handle, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
   /* Reception of the data */
-  if (HAL_QSPI_Receive(&QSPIHandle, pData, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_QSPI_Receive(handle, pData, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
@@ -388,13 +370,15 @@ uint8_t BSP_QSPI_Read(uint8_t* pData, uint32_t ReadAddr, uint32_t Size)
 
 /**
   * @brief  Writes an amount of data to the QSPI memory.
+  * @param  obj : pointer to QSPI_t structure
   * @param  pData     : Pointer to data to be written
   * @param  WriteAddr : Write start address
   * @param  Size      : Size of data to write
   * @retval QSPI memory status
   */
-uint8_t BSP_QSPI_Write(uint8_t* pData, uint32_t WriteAddr, uint32_t Size)
+uint8_t BSP_QSPI_Write(QSPI_t *obj, uint8_t* pData, uint32_t WriteAddr, uint32_t Size)
 {
+  XSPI_HandleTypeDef *handle = &(obj->handle);
 #ifdef OCTOSPI
   OSPI_RegularCmdTypeDef sCommand;
 #else /* OCTOSPI */
@@ -432,7 +416,7 @@ uint8_t BSP_QSPI_Write(uint8_t* pData, uint32_t WriteAddr, uint32_t Size)
   sCommand.DummyCycles        = 0;
   sCommand.DQSMode            = HAL_OSPI_DQS_DISABLE;
   sCommand.SIOOMode           = HAL_OSPI_SIOO_INST_EVERY_CMD;
-  
+
   /* Perform the write page by page */
   do
   {
@@ -440,25 +424,25 @@ uint8_t BSP_QSPI_Write(uint8_t* pData, uint32_t WriteAddr, uint32_t Size)
     sCommand.NbData  = current_size;
 
     /* Enable write operations */
-    if (QSPI_WriteEnable(&OSPIHandle) != QSPI_OK)
+    if (QSPI_WriteEnable(handle) != QSPI_OK)
     {
       return QSPI_ERROR;
     }
-    
+
     /* Configure the command */
-    if (HAL_OSPI_Command(&OSPIHandle, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+    if (HAL_OSPI_Command(handle, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
     {
       return QSPI_ERROR;
     }
-    
+
     /* Transmission of the data */
-    if (HAL_OSPI_Transmit(&OSPIHandle, pData, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+    if (HAL_OSPI_Transmit(handle, pData, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
     {
       return QSPI_ERROR;
     }
 
     /* Configure automatic polling mode to wait for end of program */
-    if (QSPI_AutoPollingMemReady(&OSPIHandle, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != QSPI_OK)
+    if (QSPI_AutoPollingMemReady(handle, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != QSPI_OK)
     {
       return QSPI_ERROR;
     }
@@ -483,25 +467,25 @@ uint8_t BSP_QSPI_Write(uint8_t* pData, uint32_t WriteAddr, uint32_t Size)
     sCommand.NbData  = current_size;
 
     /* Enable write operations */
-    if (QSPI_WriteEnable(&QSPIHandle) != QSPI_OK)
+    if (QSPI_WriteEnable(handle) != QSPI_OK)
     {
       return QSPI_ERROR;
     }
 
     /* Configure the command */
-    if (HAL_QSPI_Command(&QSPIHandle, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+    if (HAL_QSPI_Command(handle, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
     {
       return QSPI_ERROR;
     }
 
     /* Transmission of the data */
-    if (HAL_QSPI_Transmit(&QSPIHandle, pData, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+    if (HAL_QSPI_Transmit(handle, pData, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
     {
       return QSPI_ERROR;
     }
 
     /* Configure automatic polling mode to wait for end of program */
-    if (QSPI_AutoPollingMemReady(&QSPIHandle, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != QSPI_OK)
+    if (QSPI_AutoPollingMemReady(handle, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != QSPI_OK)
     {
       return QSPI_ERROR;
     }
@@ -518,11 +502,13 @@ uint8_t BSP_QSPI_Write(uint8_t* pData, uint32_t WriteAddr, uint32_t Size)
 
 /**
   * @brief  Erases the specified block of the QSPI memory.
+  * @param  obj : pointer to QSPI_t structure
   * @param  BlockAddress : Block address to erase
   * @retval QSPI memory status
   */
-uint8_t BSP_QSPI_Erase_Block(uint32_t BlockAddress)
+uint8_t BSP_QSPI_Erase_Block(QSPI_t *obj, uint32_t BlockAddress)
 {
+  XSPI_HandleTypeDef *handle = &(obj->handle);
 #ifdef OCTOSPI
   OSPI_RegularCmdTypeDef sCommand;
 
@@ -544,19 +530,19 @@ uint8_t BSP_QSPI_Erase_Block(uint32_t BlockAddress)
   sCommand.SIOOMode           = HAL_OSPI_SIOO_INST_EVERY_CMD;
 
   /* Enable write operations */
-  if (QSPI_WriteEnable(&OSPIHandle) != QSPI_OK)
+  if (QSPI_WriteEnable(handle) != QSPI_OK)
   {
     return QSPI_ERROR;
   }
 
   /* Send the command */
-  if (HAL_OSPI_Command(&OSPIHandle, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_OSPI_Command(handle, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
-  
-  /* Configure automatic polling mode to wait for end of erase */  
-  if (QSPI_AutoPollingMemReady(&OSPIHandle, MX25R6435F_BLOCK_ERASE_MAX_TIME) != QSPI_OK)
+
+  /* Configure automatic polling mode to wait for end of erase */
+  if (QSPI_AutoPollingMemReady(handle, MX25R6435F_BLOCK_ERASE_MAX_TIME) != QSPI_OK)
   {
     return QSPI_ERROR;
   }
@@ -578,19 +564,19 @@ uint8_t BSP_QSPI_Erase_Block(uint32_t BlockAddress)
   sCommand.SIOOMode          = QSPI_SIOO_INST_EVERY_CMD;
 
   /* Enable write operations */
-  if (QSPI_WriteEnable(&QSPIHandle) != QSPI_OK)
+  if (QSPI_WriteEnable(handle) != QSPI_OK)
   {
     return QSPI_ERROR;
   }
 
   /* Send the command */
-  if (HAL_QSPI_Command(&QSPIHandle, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_QSPI_Command(handle, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
   /* Configure automatic polling mode to wait for end of erase */
-  if (QSPI_AutoPollingMemReady(&QSPIHandle, MX25R6435F_BLOCK_ERASE_MAX_TIME) != QSPI_OK)
+  if (QSPI_AutoPollingMemReady(handle, MX25R6435F_BLOCK_ERASE_MAX_TIME) != QSPI_OK)
   {
     return QSPI_ERROR;
   }
@@ -601,6 +587,7 @@ uint8_t BSP_QSPI_Erase_Block(uint32_t BlockAddress)
 
 /**
   * @brief  Erases the specified sector of the QSPI memory.
+  * @param  obj : pointer to QSPI_t structure
   * @param  Sector : Sector address to erase (0 to 255)
   * @retval QSPI memory status
   * @note This function is non blocking meaning that sector erase
@@ -609,16 +596,18 @@ uint8_t BSP_QSPI_Erase_Block(uint32_t BlockAddress)
   *       to know when the device is available again (i.e. erase operation
   *       completed).
   */
-uint8_t BSP_QSPI_Erase_Sector(uint32_t Sector)
+uint8_t BSP_QSPI_Erase_Sector(QSPI_t *obj, uint32_t Sector)
 {
+  XSPI_HandleTypeDef *handle = &(obj->handle);
+
 #ifdef OCTOSPI
   OSPI_RegularCmdTypeDef sCommand;
-  
+
   if (Sector >= (uint32_t)(MX25R6435F_FLASH_SIZE/MX25R6435F_SECTOR_SIZE))
   {
     return QSPI_ERROR;
   }
-  
+
   /* Initialize the erase command */
   sCommand.OperationType      = HAL_OSPI_OPTYPE_COMMON_CFG;
   sCommand.FlashId            = HAL_OSPI_FLASH_ID_1;
@@ -635,15 +624,15 @@ uint8_t BSP_QSPI_Erase_Sector(uint32_t Sector)
   sCommand.DummyCycles        = 0;
   sCommand.DQSMode            = HAL_OSPI_DQS_DISABLE;
   sCommand.SIOOMode           = HAL_OSPI_SIOO_INST_EVERY_CMD;
-  
+
   /* Enable write operations */
-  if (QSPI_WriteEnable(&OSPIHandle) != QSPI_OK)
+  if (QSPI_WriteEnable(handle) != QSPI_OK)
   {
     return QSPI_ERROR;
   }
-  
+
   /* Send the command */
-  if (HAL_OSPI_Command(&OSPIHandle, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_OSPI_Command(handle, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
@@ -669,13 +658,13 @@ uint8_t BSP_QSPI_Erase_Sector(uint32_t Sector)
   sCommand.SIOOMode          = QSPI_SIOO_INST_EVERY_CMD;
 
   /* Enable write operations */
-  if (QSPI_WriteEnable(&QSPIHandle) != QSPI_OK)
+  if (QSPI_WriteEnable(handle) != QSPI_OK)
   {
     return QSPI_ERROR;
   }
 
   /* Send the command */
-  if (HAL_QSPI_Command(&QSPIHandle, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_QSPI_Command(handle, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
@@ -686,10 +675,13 @@ uint8_t BSP_QSPI_Erase_Sector(uint32_t Sector)
 
 /**
   * @brief  Erases the entire QSPI memory.
+  * @param  obj : pointer to QSPI_t structure
   * @retval QSPI memory status
   */
-uint8_t BSP_QSPI_Erase_Chip(void)
+uint8_t BSP_QSPI_Erase_Chip(QSPI_t *obj)
 {
+  XSPI_HandleTypeDef *handle = &(obj->handle);
+
 #ifdef OCTOSPI
   OSPI_RegularCmdTypeDef sCommand;
 
@@ -708,19 +700,19 @@ uint8_t BSP_QSPI_Erase_Chip(void)
   sCommand.SIOOMode           = HAL_OSPI_SIOO_INST_EVERY_CMD;
 
   /* Enable write operations */
-  if (QSPI_WriteEnable(&OSPIHandle) != QSPI_OK)
+  if (QSPI_WriteEnable(handle) != QSPI_OK)
   {
     return QSPI_ERROR;
   }
 
   /* Send the command */
-  if (HAL_OSPI_Command(&OSPIHandle, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_OSPI_Command(handle, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
-  
-  /* Configure automatic polling mode to wait for end of erase */  
-  if (QSPI_AutoPollingMemReady(&OSPIHandle, MX25R6435F_CHIP_ERASE_MAX_TIME) != QSPI_OK)
+
+  /* Configure automatic polling mode to wait for end of erase */
+  if (QSPI_AutoPollingMemReady(handle, MX25R6435F_CHIP_ERASE_MAX_TIME) != QSPI_OK)
   {
     return QSPI_ERROR;
   }
@@ -740,19 +732,19 @@ uint8_t BSP_QSPI_Erase_Chip(void)
   sCommand.SIOOMode          = QSPI_SIOO_INST_EVERY_CMD;
 
   /* Enable write operations */
-  if (QSPI_WriteEnable(&QSPIHandle) != QSPI_OK)
+  if (QSPI_WriteEnable(handle) != QSPI_OK)
   {
     return QSPI_ERROR;
   }
 
   /* Send the command */
-  if (HAL_QSPI_Command(&QSPIHandle, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_QSPI_Command(handle, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
   /* Configure automatic polling mode to wait for end of erase */
-  if (QSPI_AutoPollingMemReady(&QSPIHandle, MX25R6435F_CHIP_ERASE_MAX_TIME) != QSPI_OK)
+  if (QSPI_AutoPollingMemReady(handle, MX25R6435F_CHIP_ERASE_MAX_TIME) != QSPI_OK)
   {
     return QSPI_ERROR;
   }
@@ -763,10 +755,12 @@ uint8_t BSP_QSPI_Erase_Chip(void)
 
 /**
   * @brief  Reads current status of the QSPI memory.
+  * @param  obj : pointer to QSPI_t structure
   * @retval QSPI memory status
   */
-uint8_t BSP_QSPI_GetStatus(void)
+uint8_t BSP_QSPI_GetStatus(QSPI_t *obj)
 {
+  XSPI_HandleTypeDef *handle = &(obj->handle);
   uint8_t reg;
 #ifdef OCTOSPI
   OSPI_RegularCmdTypeDef sCommand;
@@ -788,17 +782,17 @@ uint8_t BSP_QSPI_GetStatus(void)
   sCommand.SIOOMode           = HAL_OSPI_SIOO_INST_EVERY_CMD;
 
   /* Configure the command */
-  if (HAL_OSPI_Command(&OSPIHandle, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_OSPI_Command(handle, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
   /* Reception of the data */
-  if (HAL_OSPI_Receive(&OSPIHandle, &reg, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_OSPI_Receive(handle, &reg, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
-  
+
   /* Check the value of the register */
   if ((reg & (MX25R6435F_SECR_P_FAIL | MX25R6435F_SECR_E_FAIL)) != 0)
   {
@@ -813,13 +807,13 @@ uint8_t BSP_QSPI_GetStatus(void)
   sCommand.Instruction = READ_STATUS_REG_CMD;
 
   /* Configure the command */
-  if (HAL_OSPI_Command(&OSPIHandle, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_OSPI_Command(handle, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
   /* Reception of the data */
-  if (HAL_OSPI_Receive(&OSPIHandle, &reg, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_OSPI_Receive(handle, &reg, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
@@ -839,13 +833,13 @@ uint8_t BSP_QSPI_GetStatus(void)
   sCommand.SIOOMode          = QSPI_SIOO_INST_EVERY_CMD;
 
   /* Configure the command */
-  if (HAL_QSPI_Command(&QSPIHandle, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_QSPI_Command(handle, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
   /* Reception of the data */
-  if (HAL_QSPI_Receive(&QSPIHandle, &reg, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_QSPI_Receive(handle, &reg, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
@@ -864,13 +858,13 @@ uint8_t BSP_QSPI_GetStatus(void)
   sCommand.Instruction       = READ_STATUS_REG_CMD;
 
   /* Configure the command */
-  if (HAL_QSPI_Command(&QSPIHandle, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_QSPI_Command(handle, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
   /* Reception of the data */
-  if (HAL_QSPI_Receive(&QSPIHandle, &reg, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_QSPI_Receive(handle, &reg, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
@@ -906,10 +900,13 @@ uint8_t BSP_QSPI_GetInfo(QSPI_Info* pInfo)
 
 /**
   * @brief  Configure the QSPI in memory-mapped mode
+  * @param  obj : pointer to QSPI_t structure
   * @retval QSPI memory status
   */
-uint8_t BSP_QSPI_EnableMemoryMappedMode(void)
+uint8_t BSP_QSPI_EnableMemoryMappedMode(QSPI_t *obj)
 {
+  XSPI_HandleTypeDef *handle = &(obj->handle);
+
 #ifdef OCTOSPI
   OSPI_RegularCmdTypeDef      sCommand;
   OSPI_MemoryMappedTypeDef sMemMappedCfg;
@@ -933,9 +930,9 @@ uint8_t BSP_QSPI_EnableMemoryMappedMode(void)
   sCommand.DummyCycles           = MX25R6435F_DUMMY_CYCLES_READ_QUAD;
   sCommand.DQSMode               = HAL_OSPI_DQS_DISABLE;
   sCommand.SIOOMode              = HAL_OSPI_SIOO_INST_EVERY_CMD;
-  
+
   /* Configure the command */
-  if (HAL_OSPI_Command(&OSPIHandle, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_OSPI_Command(handle, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
@@ -945,17 +942,17 @@ uint8_t BSP_QSPI_EnableMemoryMappedMode(void)
   sCommand.Instruction        = QUAD_PAGE_PROG_CMD;
   sCommand.AlternateBytesMode = HAL_OSPI_ALTERNATE_BYTES_NONE;
   sCommand.DummyCycles        = 0;
-  
+
   /* Configure the command */
-  if (HAL_OSPI_Command(&OSPIHandle, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_OSPI_Command(handle, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
   /* Configure the memory mapped mode */
   sMemMappedCfg.TimeOutActivation = HAL_OSPI_TIMEOUT_COUNTER_DISABLE;
-  
-  if (HAL_OSPI_MemoryMapped(&OSPIHandle, &sMemMappedCfg) != HAL_OK)
+
+  if (HAL_OSPI_MemoryMapped(handle, &sMemMappedCfg) != HAL_OK)
   {
     return QSPI_ERROR;
   }
@@ -980,7 +977,7 @@ uint8_t BSP_QSPI_EnableMemoryMappedMode(void)
   /* Configure the memory mapped mode */
   sMemMappedCfg.TimeOutActivation = QSPI_TIMEOUT_COUNTER_DISABLE;
 
-  if (HAL_QSPI_MemoryMapped(&QSPIHandle, &sCommand, &sMemMappedCfg) != HAL_OK)
+  if (HAL_QSPI_MemoryMapped(handle, &sCommand, &sMemMappedCfg) != HAL_OK)
   {
     return QSPI_ERROR;
   }
@@ -991,17 +988,20 @@ uint8_t BSP_QSPI_EnableMemoryMappedMode(void)
 
 /**
   * @brief  This function suspends an ongoing erase command.
+  * @param  obj : pointer to QSPI_t structure
   * @retval QSPI memory status
   */
-uint8_t BSP_QSPI_SuspendErase(void)
+uint8_t BSP_QSPI_SuspendErase(QSPI_t *obj)
 {
+  XSPI_HandleTypeDef *handle = &(obj->handle);
+
 #ifdef OCTOSPI
   OSPI_RegularCmdTypeDef sCommand;
-  
-  /* Check whether the device is busy (erase operation is 
+
+  /* Check whether the device is busy (erase operation is
   in progress).
   */
-  if (BSP_QSPI_GetStatus() == QSPI_BUSY)
+  if (BSP_QSPI_GetStatus(obj) == QSPI_BUSY)
   {
     /* Initialize the suspend command */
     sCommand.OperationType      = HAL_OSPI_OPTYPE_COMMON_CFG;
@@ -1016,9 +1016,9 @@ uint8_t BSP_QSPI_SuspendErase(void)
     sCommand.DummyCycles        = 0;
     sCommand.DQSMode            = HAL_OSPI_DQS_DISABLE;
     sCommand.SIOOMode           = HAL_OSPI_SIOO_INST_EVERY_CMD;
-    
+
     /* Send the command */
-    if (HAL_OSPI_Command(&OSPIHandle, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+    if (HAL_OSPI_Command(handle, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
     {
       return QSPI_ERROR;
     }
@@ -1042,13 +1042,13 @@ uint8_t BSP_QSPI_SuspendErase(void)
     sCommand.SIOOMode          = QSPI_SIOO_INST_EVERY_CMD;
 
     /* Send the command */
-    if (HAL_QSPI_Command(&QSPIHandle, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+    if (HAL_QSPI_Command(handle, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
     {
       return QSPI_ERROR;
     }
 #endif /* OCTOSPI */
 
-    if (BSP_QSPI_GetStatus() == QSPI_SUSPENDED)
+    if (BSP_QSPI_GetStatus(obj) == QSPI_SUSPENDED)
     {
       return QSPI_OK;
     }
@@ -1061,15 +1061,18 @@ uint8_t BSP_QSPI_SuspendErase(void)
 
 /**
   * @brief  This function resumes a paused erase command.
+  * @param  obj : pointer to QSPI_t structure
   * @retval QSPI memory status
   */
-uint8_t BSP_QSPI_ResumeErase(void)
+uint8_t BSP_QSPI_ResumeErase(QSPI_t *obj)
 {
+  XSPI_HandleTypeDef *handle = &(obj->handle);
+
 #ifdef OCTOSPI
   OSPI_RegularCmdTypeDef sCommand;
-  
+
   /* Check whether the device is in suspended state */
-  if (BSP_QSPI_GetStatus() == QSPI_SUSPENDED)
+  if (BSP_QSPI_GetStatus(obj) == QSPI_SUSPENDED)
   {
     /* Initialize the resume command */
     sCommand.OperationType      = HAL_OSPI_OPTYPE_COMMON_CFG;
@@ -1084,9 +1087,9 @@ uint8_t BSP_QSPI_ResumeErase(void)
     sCommand.DummyCycles        = 0;
     sCommand.DQSMode            = HAL_OSPI_DQS_DISABLE;
     sCommand.SIOOMode           = HAL_OSPI_SIOO_INST_EVERY_CMD;
-    
+
     /* Send the command */
-    if (HAL_OSPI_Command(&OSPIHandle, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+    if (HAL_OSPI_Command(handle, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
     {
       return QSPI_ERROR;
     }
@@ -1109,7 +1112,7 @@ uint8_t BSP_QSPI_ResumeErase(void)
     sCommand.SIOOMode          = QSPI_SIOO_INST_EVERY_CMD;
 
     /* Send the command */
-    if (HAL_QSPI_Command(&QSPIHandle, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+    if (HAL_QSPI_Command(handle, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
     {
       return QSPI_ERROR;
     }
@@ -1122,7 +1125,7 @@ uint8_t BSP_QSPI_ResumeErase(void)
     if the device is not in a suspended state.
     */
 
-    if (BSP_QSPI_GetStatus() == QSPI_BUSY)
+    if (BSP_QSPI_GetStatus(obj) == QSPI_BUSY)
     {
       return QSPI_OK;
     }
@@ -1135,13 +1138,16 @@ uint8_t BSP_QSPI_ResumeErase(void)
 
 /**
   * @brief  This function enter the QSPI memory in deep power down mode.
+  * @param  obj : pointer to QSPI_t structure
   * @retval QSPI memory status
   */
-uint8_t BSP_QSPI_EnterDeepPowerDown(void)
+uint8_t BSP_QSPI_EnterDeepPowerDown(QSPI_t *obj)
 {
+  XSPI_HandleTypeDef *handle = &(obj->handle);
+
 #ifdef OCTOSPI
   OSPI_RegularCmdTypeDef sCommand;
-  
+
   /* Initialize the deep power down command */
   sCommand.OperationType      = HAL_OSPI_OPTYPE_COMMON_CFG;
   sCommand.FlashId            = HAL_OSPI_FLASH_ID_1;
@@ -1155,9 +1161,9 @@ uint8_t BSP_QSPI_EnterDeepPowerDown(void)
   sCommand.DummyCycles        = 0;
   sCommand.DQSMode            = HAL_OSPI_DQS_DISABLE;
   sCommand.SIOOMode           = HAL_OSPI_SIOO_INST_EVERY_CMD;
-    
+
   /* Send the command */
-  if (HAL_OSPI_Command(&OSPIHandle, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_OSPI_Command(handle, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
@@ -1176,7 +1182,7 @@ uint8_t BSP_QSPI_EnterDeepPowerDown(void)
   sCommand.SIOOMode          = QSPI_SIOO_INST_EVERY_CMD;
 
   /* Send the command */
-  if (HAL_QSPI_Command(&QSPIHandle, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_QSPI_Command(handle, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
@@ -1190,13 +1196,16 @@ uint8_t BSP_QSPI_EnterDeepPowerDown(void)
 
 /**
   * @brief  This function leave the QSPI memory from deep power down mode.
+  * @param  obj : pointer to QSPI_t structure
   * @retval QSPI memory status
   */
-uint8_t BSP_QSPI_LeaveDeepPowerDown(void)
+uint8_t BSP_QSPI_LeaveDeepPowerDown(QSPI_t *obj)
 {
+  XSPI_HandleTypeDef *handle = &(obj->handle);
+
 #ifdef OCTOSPI
   OSPI_RegularCmdTypeDef sCommand;
-  
+
   /* Initialize the erase command */
   sCommand.OperationType      = HAL_OSPI_OPTYPE_COMMON_CFG;
   sCommand.FlashId            = HAL_OSPI_FLASH_ID_1;
@@ -1210,9 +1219,9 @@ uint8_t BSP_QSPI_LeaveDeepPowerDown(void)
   sCommand.DummyCycles        = 0;
   sCommand.DQSMode            = HAL_OSPI_DQS_DISABLE;
   sCommand.SIOOMode           = HAL_OSPI_SIOO_INST_EVERY_CMD;
-    
+
   /* Send the command */
-  if (HAL_OSPI_Command(&OSPIHandle, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_OSPI_Command(handle, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
@@ -1232,7 +1241,7 @@ uint8_t BSP_QSPI_LeaveDeepPowerDown(void)
   sCommand.SIOOMode          = QSPI_SIOO_INST_EVERY_CMD;
 
   /* Send the command */
-  if (HAL_QSPI_Command(&QSPIHandle, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_QSPI_Command(handle, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
@@ -1246,112 +1255,85 @@ uint8_t BSP_QSPI_LeaveDeepPowerDown(void)
 
 /**
   * @brief  Initializes the QSPI MSP.
+  * @param  obj : pointer to QSPI_t structure
   * @retval None
   */
-__weak void BSP_QSPI_MspInit(void)
+__weak void BSP_QSPI_MspInit(QSPI_t *obj)
 {
-  GPIO_InitTypeDef GPIO_InitStruct;
-  GPIO_TypeDef *port;
-  uint8_t idx = 0;
-  PinName pin;
-
 #ifdef OCTOSPI
-  /* Enable the OctoSPI memory interface clock */
-  __HAL_RCC_OSPI1_CLK_ENABLE();
 
-  /* Reset the OctoSPI memory interface */
-  __HAL_RCC_OSPI1_FORCE_RESET();
-  __HAL_RCC_OSPI1_RELEASE_RESET();
+    /* Enable the OctoSPI memory interface clock */
+    /* Reset the OctoSPI memory interface */
+#if defined(OCTOSPI1)
+  if (obj->qspi == OCTOSPI1) {
+    __HAL_RCC_OSPI1_CLK_ENABLE();
 
-  /* Enable GPIO clocks */
-  __HAL_RCC_GPIOE_CLK_ENABLE();
-
-  /* OCTOSPI CLK, CS, D0, D1, D2 and D3 GPIO pins configuration  */
-  pin = PinMap_OCTOSPI[idx].pin;
-  while(pin != NC)
-  {
-    /* Enable GPIO clocks */
-    port = set_GPIO_Port_Clock(STM_PORT(pin));
-
-    /* Pin configuration */
-    GPIO_InitStruct.Pin       = STM_GPIO_PIN(pin);
-    GPIO_InitStruct.Mode      = STM_PIN_MODE(pinmap_function(pin, PinMap_OCTOSPI));
-    GPIO_InitStruct.Pull      = STM_PIN_PUPD(pinmap_function(pin, PinMap_OCTOSPI));
-    GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
-    GPIO_InitStruct.Alternate = STM_PIN_AFNUM(pinmap_function(pin, PinMap_OCTOSPI));
-    HAL_GPIO_Init(port, &GPIO_InitStruct);
-
-    pin = PinMap_OCTOSPI[idx++].pin;
+    __HAL_RCC_OSPI1_FORCE_RESET();
+    __HAL_RCC_OSPI1_RELEASE_RESET();
   }
-  #else /* OCTOSPI */
+#endif
+#if defined(OCTOSPI2)
+  if (obj->qspi == OCTOSPI2) {
+    __HAL_RCC_OSPI2_CLK_ENABLE();
+
+    __HAL_RCC_OSPI2_FORCE_RESET();
+    __HAL_RCC_OSPI2_RELEASE_RESET();
+  }
+#endif
+#else /* OCTOSPI */
   /* Enable the QuadSPI memory interface clock */
   __HAL_RCC_QSPI_CLK_ENABLE();
 
   /* Reset the QuadSPI memory interface */
   __HAL_RCC_QSPI_FORCE_RESET();
   __HAL_RCC_QSPI_RELEASE_RESET();
-
-  /* QSPI CLK, CS, D0, D1, D2 and D3 GPIO pins configuration  */
-  pin = PinMap_QUADSPI[idx].pin;
-  while(pin != NC)
-  {
-    /* Enable GPIO clocks */
-    port = set_GPIO_Port_Clock(STM_PORT(pin));
-
-    /* Pin configuration */
-    GPIO_InitStruct.Pin       = STM_GPIO_PIN(pin);
-    GPIO_InitStruct.Mode      = STM_PIN_MODE(pinmap_function(pin, PinMap_QUADSPI));
-    GPIO_InitStruct.Pull      = STM_PIN_PUPD(pinmap_function(pin, PinMap_QUADSPI));
-    GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
-    GPIO_InitStruct.Alternate = STM_PIN_AFNUM(pinmap_function(pin, PinMap_QUADSPI));
-    HAL_GPIO_Init(port, &GPIO_InitStruct);
-
-    pin = PinMap_QUADSPI[idx++].pin;
-  }
 #endif /* OCTOSPI */
+
+  /* Configure QSPI GPIO pins */
+  pinmap_pinout(obj->pin_d0, PinMap_XSPI_DATA0);
+  pinmap_pinout(obj->pin_d1, PinMap_XSPI_DATA1);
+  pinmap_pinout(obj->pin_d2, PinMap_XSPI_DATA2);
+  pinmap_pinout(obj->pin_d3, PinMap_XSPI_DATA3);
+  pinmap_pinout(obj->pin_sclk, PinMap_XSPI_SCLK);
+  pinmap_pinout(obj->pin_ssel, PinMap_XSPI_SSEL);
 }
 
 /**
   * @brief  De-Initializes the QSPI MSP.
+  * @param  obj : pointer to QSPI_t structure
   * @retval None
   */
-__weak void BSP_QSPI_MspDeInit(void)
+__weak void BSP_QSPI_MspDeInit(QSPI_t *obj)
 {
-  GPIO_InitTypeDef GPIO_InitStruct;
-  GPIO_TypeDef *port;
-  uint8_t idx = 0;
-  PinName pin;
+  /* QSPI CLK, CS, D0-D3 GPIO pins de-configuration  */
+
+  HAL_GPIO_DeInit((GPIO_TypeDef *)STM_PORT(obj->pin_d0), STM_GPIO_PIN(obj->pin_d0));
+  HAL_GPIO_DeInit((GPIO_TypeDef *)STM_PORT(obj->pin_d1), STM_GPIO_PIN(obj->pin_d1));
+  HAL_GPIO_DeInit((GPIO_TypeDef *)STM_PORT(obj->pin_d2), STM_GPIO_PIN(obj->pin_d2));
+  HAL_GPIO_DeInit((GPIO_TypeDef *)STM_PORT(obj->pin_d3), STM_GPIO_PIN(obj->pin_d3));
+  HAL_GPIO_DeInit((GPIO_TypeDef *)STM_PORT(obj->pin_sclk), STM_GPIO_PIN(obj->pin_sclk));
+  HAL_GPIO_DeInit((GPIO_TypeDef *)STM_PORT(obj->pin_ssel), STM_GPIO_PIN(obj->pin_ssel));
 
 #ifdef OCTOSPI
-  /* OSPI CLK, CS, D0-D3 GPIO pins de-configuration  */
-  pin = PinMap_OCTOSPI[idx].pin;
-  while(pin != NC)
-  {
-    port = get_GPIO_Port(STM_PORT(pin));
-    GPIO_InitStruct.Pin       = STM_GPIO_PIN(pin);
-    HAL_GPIO_DeInit(port, GPIO_InitStruct.Pin);
-
-    pin = PinMap_OCTOSPI[idx++].pin;
-  }
-
+#if defined(OCTOSPI1)
   /* Reset the OctoSPI memory interface */
-  __HAL_RCC_OSPI1_FORCE_RESET();
-  __HAL_RCC_OSPI1_RELEASE_RESET();
-
   /* Disable the OctoSPI memory interface clock */
-  __HAL_RCC_OSPI1_CLK_DISABLE();
-#else /* OCTOSPI */
-  /* QSPI CLK, CS, D0-D3 GPIO pins de-configuration  */
-  pin = PinMap_QUADSPI[idx].pin;
-  while(pin != NC)
-  {
-    port = get_GPIO_Port(STM_PORT(pin));
-    GPIO_InitStruct.Pin       = STM_GPIO_PIN(pin);
-    HAL_GPIO_DeInit(port, GPIO_InitStruct.Pin);
+  if (obj->qspi == OCTOSPI1) {
+    __HAL_RCC_OSPI1_FORCE_RESET();
+    __HAL_RCC_OSPI1_RELEASE_RESET();
 
-    pin = PinMap_QUADSPI[idx++].pin;
+    __HAL_RCC_OSPI1_CLK_DISABLE();
   }
+#endif
+#if defined(OCTOSPI2)
+  if (obj->qspi == OCTOSPI2) {
+    __HAL_RCC_OSPI2_FORCE_RESET();
+    __HAL_RCC_OSPI2_RELEASE_RESET();
 
+    __HAL_RCC_OSPI2_CLK_DISABLE();
+  }
+#endif
+#else /* OCTOSPI */
   /* Reset the QuadSPI memory interface */
   __HAL_RCC_QSPI_FORCE_RESET();
   __HAL_RCC_QSPI_RELEASE_RESET();
@@ -1371,7 +1353,7 @@ __weak void BSP_QSPI_MspDeInit(void)
 
 /**
   * @brief  This function reset the QSPI memory.
-  * @param  hqspi : QSPI handle
+  * @param  hxspi : QSPI handle
   * @retval None
   */
 static uint8_t QSPI_ResetMemory(XSPI_HandleTypeDef *hxspi)
@@ -1394,20 +1376,20 @@ static uint8_t QSPI_ResetMemory(XSPI_HandleTypeDef *hxspi)
   sCommand.SIOOMode           = HAL_OSPI_SIOO_INST_EVERY_CMD;
 
   /* Send the command */
-  if (HAL_OSPI_Command(hospi, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_OSPI_Command(hxspi, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
   /* Send the reset memory command */
   sCommand.Instruction = RESET_MEMORY_CMD;
-  if (HAL_OSPI_Command(hospi, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_OSPI_Command(hxspi, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
-  /* Configure automatic polling mode to wait the memory is ready */  
-  if (QSPI_AutoPollingMemReady(hospi, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != QSPI_OK)
+  /* Configure automatic polling mode to wait the memory is ready */
+  if (QSPI_AutoPollingMemReady(hxspi, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != QSPI_OK)
   {
     return QSPI_ERROR;
   }
@@ -1427,20 +1409,20 @@ static uint8_t QSPI_ResetMemory(XSPI_HandleTypeDef *hxspi)
   sCommand.SIOOMode          = QSPI_SIOO_INST_EVERY_CMD;
 
   /* Send the command */
-  if (HAL_QSPI_Command(hqspi, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_QSPI_Command(hxspi, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
   /* Send the reset memory command */
   sCommand.Instruction = RESET_MEMORY_CMD;
-  if (HAL_QSPI_Command(hqspi, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_QSPI_Command(hxspi, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
   /* Configure automatic polling mode to wait the memory is ready */
-  if (QSPI_AutoPollingMemReady(hqspi, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != QSPI_OK)
+  if (QSPI_AutoPollingMemReady(hxspi, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != QSPI_OK)
   {
     return QSPI_ERROR;
   }
@@ -1451,7 +1433,7 @@ static uint8_t QSPI_ResetMemory(XSPI_HandleTypeDef *hxspi)
 
 /**
   * @brief  This function send a Write Enable and wait it is effective.
-  * @param  hqspi : QSPI handle
+  * @param  hxspi : QSPI handle
   * @retval None
   */
 static uint8_t QSPI_WriteEnable(XSPI_HandleTypeDef *hxspi)
@@ -1474,12 +1456,12 @@ static uint8_t QSPI_WriteEnable(XSPI_HandleTypeDef *hxspi)
   sCommand.DQSMode            = HAL_OSPI_DQS_DISABLE;
   sCommand.SIOOMode           = HAL_OSPI_SIOO_INST_EVERY_CMD;
 
-  if (HAL_OSPI_Command(hospi, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_OSPI_Command(hxspi, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
-  
-  /* Configure automatic polling mode to wait for write enabling */  
+
+  /* Configure automatic polling mode to wait for write enabling */
   sConfig.Match         = MX25R6435F_SR_WEL;
   sConfig.Mask          = MX25R6435F_SR_WEL;
   sConfig.MatchMode     = HAL_OSPI_MATCH_MODE_AND;
@@ -1491,12 +1473,12 @@ static uint8_t QSPI_WriteEnable(XSPI_HandleTypeDef *hxspi)
   sCommand.NbData       = 1;
   sCommand.DataDtrMode  = HAL_OSPI_DATA_DTR_DISABLE;
 
-  if (HAL_OSPI_Command(hospi, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_OSPI_Command(hxspi, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
-  if (HAL_OSPI_AutoPolling(hospi, &sConfig, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_OSPI_AutoPolling(hxspi, &sConfig, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
@@ -1515,7 +1497,7 @@ static uint8_t QSPI_WriteEnable(XSPI_HandleTypeDef *hxspi)
   sCommand.DdrHoldHalfCycle  = QSPI_DDR_HHC_ANALOG_DELAY;
   sCommand.SIOOMode          = QSPI_SIOO_INST_EVERY_CMD;
 
-  if (HAL_QSPI_Command(hqspi, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_QSPI_Command(hxspi, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
@@ -1531,7 +1513,7 @@ static uint8_t QSPI_WriteEnable(XSPI_HandleTypeDef *hxspi)
   sCommand.Instruction    = READ_STATUS_REG_CMD;
   sCommand.DataMode       = QSPI_DATA_1_LINE;
 
-  if (HAL_QSPI_AutoPolling(hqspi, &sCommand, &sConfig, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_QSPI_AutoPolling(hxspi, &sCommand, &sConfig, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
@@ -1542,7 +1524,7 @@ static uint8_t QSPI_WriteEnable(XSPI_HandleTypeDef *hxspi)
 
 /**
   * @brief  This function read the SR of the memory and wait the EOP.
-  * @param  hqspi   : QSPI handle
+  * @param  hxspi   : QSPI handle
   * @param  Timeout : Timeout for auto-polling
   * @retval None
   */
@@ -1552,7 +1534,7 @@ static uint8_t QSPI_AutoPollingMemReady(XSPI_HandleTypeDef *hxspi, uint32_t Time
   OSPI_RegularCmdTypeDef sCommand;
   OSPI_AutoPollingTypeDef sConfig;
 
-  /* Configure automatic polling mode to wait for memory ready */  
+  /* Configure automatic polling mode to wait for memory ready */
   sCommand.OperationType      = HAL_OSPI_OPTYPE_COMMON_CFG;
   sCommand.FlashId            = HAL_OSPI_FLASH_ID_1;
   sCommand.Instruction        = READ_STATUS_REG_CMD;
@@ -1574,12 +1556,12 @@ static uint8_t QSPI_AutoPollingMemReady(XSPI_HandleTypeDef *hxspi, uint32_t Time
   sConfig.Interval      = 0x10;
   sConfig.AutomaticStop = HAL_OSPI_AUTOMATIC_STOP_ENABLE;
 
-  if (HAL_OSPI_Command(hospi, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_OSPI_Command(hxspi, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
-  if (HAL_OSPI_AutoPolling(hospi, &sConfig, Timeout) != HAL_OK)
+  if (HAL_OSPI_AutoPolling(hxspi, &sConfig, Timeout) != HAL_OK)
   {
     return QSPI_ERROR;
   }
@@ -1605,7 +1587,7 @@ static uint8_t QSPI_AutoPollingMemReady(XSPI_HandleTypeDef *hxspi, uint32_t Time
   sConfig.Interval        = 0x10;
   sConfig.AutomaticStop   = QSPI_AUTOMATIC_STOP_ENABLE;
 
-  if (HAL_QSPI_AutoPolling(hqspi, &sCommand, &sConfig, Timeout) != HAL_OK)
+  if (HAL_QSPI_AutoPolling(hxspi, &sCommand, &sConfig, Timeout) != HAL_OK)
   {
     return QSPI_ERROR;
   }
@@ -1616,14 +1598,14 @@ static uint8_t QSPI_AutoPollingMemReady(XSPI_HandleTypeDef *hxspi, uint32_t Time
 
 /**
   * @brief  This function enables/disables the Quad mode of the memory.
-  * @param  hqspi     : QSPI handle
+  * @param  hxspi     : QSPI handle
   * @param  Operation : QSPI_QUAD_ENABLE or QSPI_QUAD_DISABLE mode
   * @retval None
   */
 static uint8_t QSPI_QuadMode(XSPI_HandleTypeDef *hxspi, uint8_t Operation)
 {
 #ifdef OCTOSPI
-    OSPI_RegularCmdTypeDef sCommand;
+  OSPI_RegularCmdTypeDef sCommand;
   uint8_t reg;
 
   /* Read status register */
@@ -1642,22 +1624,22 @@ static uint8_t QSPI_QuadMode(XSPI_HandleTypeDef *hxspi, uint8_t Operation)
   sCommand.DQSMode            = HAL_OSPI_DQS_DISABLE;
   sCommand.SIOOMode           = HAL_OSPI_SIOO_INST_EVERY_CMD;
 
-  if (HAL_OSPI_Command(hospi, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_OSPI_Command(hxspi, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
-  if (HAL_OSPI_Receive(hospi, &reg, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_OSPI_Receive(hxspi, &reg, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
   /* Enable write operations */
-  if (QSPI_WriteEnable(hospi) != QSPI_OK)
+  if (QSPI_WriteEnable(hxspi) != QSPI_OK)
   {
     return QSPI_ERROR;
   }
-  
+
   /* Activate/deactivate the Quad mode */
   if (Operation == QSPI_QUAD_ENABLE)
   {
@@ -1670,31 +1652,31 @@ static uint8_t QSPI_QuadMode(XSPI_HandleTypeDef *hxspi, uint8_t Operation)
 
   sCommand.Instruction = WRITE_STATUS_CFG_REG_CMD;
 
-  if (HAL_OSPI_Command(hospi, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_OSPI_Command(hxspi, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
-  if (HAL_OSPI_Transmit(hospi, &reg, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_OSPI_Transmit(hxspi, &reg, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
-  /* Wait that memory is ready */  
-  if (QSPI_AutoPollingMemReady(hospi, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != QSPI_OK)
+  /* Wait that memory is ready */
+  if (QSPI_AutoPollingMemReady(hxspi, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != QSPI_OK)
   {
     return QSPI_ERROR;
   }
-  
+
   /* Check the configuration has been correctly done */
   sCommand.Instruction = READ_STATUS_REG_CMD;
 
-  if (HAL_OSPI_Command(hospi, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_OSPI_Command(hxspi, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
-  if (HAL_OSPI_Receive(hospi, &reg, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_OSPI_Receive(hxspi, &reg, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
@@ -1714,18 +1696,18 @@ static uint8_t QSPI_QuadMode(XSPI_HandleTypeDef *hxspi, uint8_t Operation)
   sCommand.DdrHoldHalfCycle  = QSPI_DDR_HHC_ANALOG_DELAY;
   sCommand.SIOOMode          = QSPI_SIOO_INST_EVERY_CMD;
 
-  if (HAL_QSPI_Command(hqspi, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_QSPI_Command(hxspi, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
-  if (HAL_QSPI_Receive(hqspi, &reg, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_QSPI_Receive(hxspi, &reg, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
   /* Enable write operations */
-  if (QSPI_WriteEnable(hqspi) != QSPI_OK)
+  if (QSPI_WriteEnable(hxspi) != QSPI_OK)
   {
     return QSPI_ERROR;
   }
@@ -1742,18 +1724,18 @@ static uint8_t QSPI_QuadMode(XSPI_HandleTypeDef *hxspi, uint8_t Operation)
 
   sCommand.Instruction = WRITE_STATUS_CFG_REG_CMD;
 
-  if (HAL_QSPI_Command(hqspi, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_QSPI_Command(hxspi, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
-  if (HAL_QSPI_Transmit(hqspi, &reg, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_QSPI_Transmit(hxspi, &reg, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
   /* Wait that memory is ready */
-  if (QSPI_AutoPollingMemReady(hqspi, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != QSPI_OK)
+  if (QSPI_AutoPollingMemReady(hxspi, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != QSPI_OK)
   {
     return QSPI_ERROR;
   }
@@ -1761,12 +1743,12 @@ static uint8_t QSPI_QuadMode(XSPI_HandleTypeDef *hxspi, uint8_t Operation)
   /* Check the configuration has been correctly done */
   sCommand.Instruction = READ_STATUS_REG_CMD;
 
-  if (HAL_QSPI_Command(hqspi, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_QSPI_Command(hxspi, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
-  if (HAL_QSPI_Receive(hqspi, &reg, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_QSPI_Receive(hxspi, &reg, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
@@ -1783,7 +1765,7 @@ static uint8_t QSPI_QuadMode(XSPI_HandleTypeDef *hxspi, uint8_t Operation)
 
 /**
   * @brief  This function enables/disables the high performance mode of the memory.
-  * @param  hqspi     : QSPI handle
+  * @param  hxspi     : QSPI handle
   * @param  Operation : QSPI_HIGH_PERF_ENABLE or QSPI_HIGH_PERF_DISABLE high performance mode
   * @retval None
   */
@@ -1809,12 +1791,12 @@ static uint8_t QSPI_HighPerfMode(XSPI_HandleTypeDef *hxspi, uint8_t Operation)
   sCommand.DQSMode            = HAL_OSPI_DQS_DISABLE;
   sCommand.SIOOMode           = HAL_OSPI_SIOO_INST_EVERY_CMD;
 
-  if (HAL_OSPI_Command(hospi, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_OSPI_Command(hxspi, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
-  if (HAL_OSPI_Receive(hospi, &(reg[0]), HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_OSPI_Receive(hxspi, &(reg[0]), HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
@@ -1823,22 +1805,22 @@ static uint8_t QSPI_HighPerfMode(XSPI_HandleTypeDef *hxspi, uint8_t Operation)
   sCommand.Instruction = READ_CFG_REG_CMD;
   sCommand.NbData      = 2;
 
-  if (HAL_OSPI_Command(hospi, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_OSPI_Command(hxspi, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
-  if (HAL_OSPI_Receive(hospi, &(reg[1]), HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_OSPI_Receive(hxspi, &(reg[1]), HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
   /* Enable write operations */
-  if (QSPI_WriteEnable(hospi) != QSPI_OK)
+  if (QSPI_WriteEnable(hxspi) != QSPI_OK)
   {
     return QSPI_ERROR;
   }
-  
+
   /* Activate/deactivate the Quad mode */
   if (Operation == QSPI_HIGH_PERF_ENABLE)
   {
@@ -1852,32 +1834,32 @@ static uint8_t QSPI_HighPerfMode(XSPI_HandleTypeDef *hxspi, uint8_t Operation)
   sCommand.Instruction = WRITE_STATUS_CFG_REG_CMD;
   sCommand.NbData      = 3;
 
-  if (HAL_OSPI_Command(hospi, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_OSPI_Command(hxspi, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
-  if (HAL_OSPI_Transmit(hospi, &(reg[0]), HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_OSPI_Transmit(hxspi, &(reg[0]), HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
-  /* Wait that memory is ready */  
-  if (QSPI_AutoPollingMemReady(hospi, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != QSPI_OK)
+  /* Wait that memory is ready */
+  if (QSPI_AutoPollingMemReady(hxspi, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != QSPI_OK)
   {
     return QSPI_ERROR;
   }
-  
+
   /* Check the configuration has been correctly done */
   sCommand.Instruction = READ_CFG_REG_CMD;
   sCommand.NbData      = 2;
 
-  if (HAL_OSPI_Command(hospi, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_OSPI_Command(hxspi, &sCommand, HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
-  if (HAL_OSPI_Receive(hospi, &(reg[0]), HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_OSPI_Receive(hxspi, &(reg[0]), HAL_OSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
@@ -1897,12 +1879,12 @@ static uint8_t QSPI_HighPerfMode(XSPI_HandleTypeDef *hxspi, uint8_t Operation)
   sCommand.DdrHoldHalfCycle  = QSPI_DDR_HHC_ANALOG_DELAY;
   sCommand.SIOOMode          = QSPI_SIOO_INST_EVERY_CMD;
 
-  if (HAL_QSPI_Command(hqspi, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_QSPI_Command(hxspi, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
-  if (HAL_QSPI_Receive(hqspi, &(reg[0]), HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_QSPI_Receive(hxspi, &(reg[0]), HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
@@ -1911,18 +1893,18 @@ static uint8_t QSPI_HighPerfMode(XSPI_HandleTypeDef *hxspi, uint8_t Operation)
   sCommand.Instruction = READ_CFG_REG_CMD;
   sCommand.NbData      = 2;
 
-  if (HAL_QSPI_Command(hqspi, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_QSPI_Command(hxspi, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
-  if (HAL_QSPI_Receive(hqspi, &(reg[1]), HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_QSPI_Receive(hxspi, &(reg[1]), HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
   /* Enable write operations */
-  if (QSPI_WriteEnable(hqspi) != QSPI_OK)
+  if (QSPI_WriteEnable(hxspi) != QSPI_OK)
   {
     return QSPI_ERROR;
   }
@@ -1940,18 +1922,18 @@ static uint8_t QSPI_HighPerfMode(XSPI_HandleTypeDef *hxspi, uint8_t Operation)
   sCommand.Instruction = WRITE_STATUS_CFG_REG_CMD;
   sCommand.NbData      = 3;
 
-  if (HAL_QSPI_Command(hqspi, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_QSPI_Command(hxspi, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
-  if (HAL_QSPI_Transmit(hqspi, &(reg[0]), HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_QSPI_Transmit(hxspi, &(reg[0]), HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
   /* Wait that memory is ready */
-  if (QSPI_AutoPollingMemReady(hqspi, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != QSPI_OK)
+  if (QSPI_AutoPollingMemReady(hxspi, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != QSPI_OK)
   {
     return QSPI_ERROR;
   }
@@ -1960,12 +1942,12 @@ static uint8_t QSPI_HighPerfMode(XSPI_HandleTypeDef *hxspi, uint8_t Operation)
   sCommand.Instruction = READ_CFG_REG_CMD;
   sCommand.NbData      = 2;
 
-  if (HAL_QSPI_Command(hqspi, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_QSPI_Command(hxspi, &sCommand, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }
 
-  if (HAL_QSPI_Receive(hqspi, &(reg[0]), HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
+  if (HAL_QSPI_Receive(hxspi, &(reg[0]), HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK)
   {
     return QSPI_ERROR;
   }

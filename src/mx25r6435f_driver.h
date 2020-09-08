@@ -46,18 +46,9 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32_def.h"
+#include "PeripheralPins.h"
 #include "mx25r6435f_desc.h"
 
-#if defined(OCTOSPI1)
-#define OCTOSPI OCTOSPI1
-#elif defined(OCTOSPI2)
-#define OCTOSPI OCTOSPI2
-#else
-/* Checks if QSPI available */
-#ifndef QUADSPI
-#error "QSPI not available. MX25R6435F library compilation failed."
-#endif /* QSPI */
-#endif /* OSPI */
 
 /** @addtogroup BSP
   * @{
@@ -75,6 +66,34 @@
 /** @defgroup STM32L475E_IOT01_QSPI_Exported_Constants QSPI Exported Constants
   * @{
   */
+
+#if defined(OCTOSPI1) || defined(OCTOSPI2)
+#define OCTOSPI
+#define XSPI_HandleTypeDef  OSPI_HandleTypeDef
+#define XSPI_TypeDef        OCTOSPI_TypeDef
+#define PinMap_XSPI_DATA0   PinMap_OCTOSPI_DATA0
+#define PinMap_XSPI_DATA1   PinMap_OCTOSPI_DATA1
+#define PinMap_XSPI_DATA2   PinMap_OCTOSPI_DATA2
+#define PinMap_XSPI_DATA3   PinMap_OCTOSPI_DATA3
+#define PinMap_XSPI_SCLK    PinMap_OCTOSPI_SCLK
+#define PinMap_XSPI_SSEL    PinMap_OCTOSPI_SSEL
+#define HAL_XSPI_Init       HAL_OSPI_Init
+#define HAL_XSPI_DeInit     HAL_OSPI_DeInit
+#elif defined(QUADSPI)
+#define XSPI_HandleTypeDef  QSPI_HandleTypeDef
+#define XSPI_TypeDef        QUADSPI_TypeDef
+#define PinMap_XSPI_DATA0   PinMap_QUADSPI_DATA0
+#define PinMap_XSPI_DATA1   PinMap_QUADSPI_DATA1
+#define PinMap_XSPI_DATA2   PinMap_QUADSPI_DATA2
+#define PinMap_XSPI_DATA3   PinMap_QUADSPI_DATA3
+#define PinMap_XSPI_SCLK    PinMap_QUADSPI_SCLK
+#define PinMap_XSPI_SSEL    PinMap_QUADSPI_SSEL
+#define HAL_XSPI_Init       HAL_QSPI_Init
+#define HAL_XSPI_DeInit     HAL_QSPI_DeInit
+#else
+#error "QSPI feature not available. MX25R6435F library compilation failed."
+#endif /* OCTOSPIx */
+
 /* QSPI Error codes */
 #define QSPI_OK            ((uint8_t)0x00)
 #define QSPI_ERROR         ((uint8_t)0x01)
@@ -99,6 +118,18 @@ typedef struct {
   uint32_t ProgPagesNumber;    /*!< Number of pages for the program operation */
 } QSPI_Info;
 
+
+typedef struct {
+  XSPI_HandleTypeDef handle;
+  XSPI_TypeDef *qspi;
+  PinName pin_d0;
+  PinName pin_d1;
+  PinName pin_d2;
+  PinName pin_d3;
+  PinName pin_sclk;
+  PinName pin_ssel;
+} QSPI_t;
+
 /**
   * @}
   */
@@ -107,23 +138,23 @@ typedef struct {
 /** @defgroup STM32L475E_IOT01_QSPI_Exported_Functions QSPI Exported Functions
   * @{
   */
-uint8_t BSP_QSPI_Init                  (void);
-uint8_t BSP_QSPI_DeInit                (void);
-uint8_t BSP_QSPI_Read                  (uint8_t* pData, uint32_t ReadAddr, uint32_t Size);
-uint8_t BSP_QSPI_Write                 (uint8_t* pData, uint32_t WriteAddr, uint32_t Size);
-uint8_t BSP_QSPI_Erase_Block           (uint32_t BlockAddress);
-uint8_t BSP_QSPI_Erase_Sector          (uint32_t Sector);
-uint8_t BSP_QSPI_Erase_Chip            (void);
-uint8_t BSP_QSPI_GetStatus             (void);
+uint8_t BSP_QSPI_Init                  (QSPI_t *obj);
+uint8_t BSP_QSPI_DeInit                (QSPI_t *obj);
+uint8_t BSP_QSPI_Read                  (QSPI_t *obj, uint8_t* pData, uint32_t ReadAddr, uint32_t Size);
+uint8_t BSP_QSPI_Write                 (QSPI_t *obj, uint8_t* pData, uint32_t WriteAddr, uint32_t Size);
+uint8_t BSP_QSPI_Erase_Block           (QSPI_t *obj, uint32_t BlockAddress);
+uint8_t BSP_QSPI_Erase_Sector          (QSPI_t *obj, uint32_t Sector);
+uint8_t BSP_QSPI_Erase_Chip            (QSPI_t *obj);
+uint8_t BSP_QSPI_GetStatus             (QSPI_t *obj);
 uint8_t BSP_QSPI_GetInfo               (QSPI_Info* pInfo);
-uint8_t BSP_QSPI_EnableMemoryMappedMode(void);
-uint8_t BSP_QSPI_SuspendErase          (void);
-uint8_t BSP_QSPI_ResumeErase           (void);
-uint8_t BSP_QSPI_EnterDeepPowerDown    (void);
-uint8_t BSP_QSPI_LeaveDeepPowerDown    (void);
+uint8_t BSP_QSPI_EnableMemoryMappedMode(QSPI_t *obj);
+uint8_t BSP_QSPI_SuspendErase          (QSPI_t *obj);
+uint8_t BSP_QSPI_ResumeErase           (QSPI_t *obj);
+uint8_t BSP_QSPI_EnterDeepPowerDown    (QSPI_t *obj);
+uint8_t BSP_QSPI_LeaveDeepPowerDown    (QSPI_t *obj);
 
-void BSP_QSPI_MspInit(void);
-void BSP_QSPI_MspDeInit(void);
+void BSP_QSPI_MspInit(QSPI_t *obj);
+void BSP_QSPI_MspDeInit(QSPI_t *obj);
 /**
   * @}
   */
