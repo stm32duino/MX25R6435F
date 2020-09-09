@@ -79,6 +79,10 @@
 #define PinMap_XSPI_SSEL    PinMap_OCTOSPI_SSEL
 #define HAL_XSPI_Init       HAL_OSPI_Init
 #define HAL_XSPI_DeInit     HAL_OSPI_DeInit
+#define HAL_XSPI_TIMEOUT_DEFAULT_VALUE HAL_OSPI_TIMEOUT_DEFAULT_VALUE
+#define HAL_XSPI_Command    HAL_OSPI_Command
+#define HAL_XSPI_Transmit   HAL_OSPI_Transmit
+#define HAL_XSPI_Receive    HAL_OSPI_Receive
 #elif defined(QUADSPI)
 #define XSPI_HandleTypeDef  QSPI_HandleTypeDef
 #define XSPI_TypeDef        QUADSPI_TypeDef
@@ -90,6 +94,10 @@
 #define PinMap_XSPI_SSEL    PinMap_QUADSPI_SSEL
 #define HAL_XSPI_Init       HAL_QSPI_Init
 #define HAL_XSPI_DeInit     HAL_QSPI_DeInit
+#define HAL_XSPI_TIMEOUT_DEFAULT_VALUE HAL_QPSI_TIMEOUT_DEFAULT_VALUE
+#define HAL_XSPI_Command    HAL_QSPI_Command
+#define HAL_XSPI_Transmit   HAL_QSPI_Transmit
+#define HAL_XSPI_Receive    HAL_QSPI_Receive
 #else
 #error "QSPI feature not available. MX25R6435F library compilation failed."
 #endif /* OCTOSPIx */
