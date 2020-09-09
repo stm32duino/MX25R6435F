@@ -1,156 +1,60 @@
 /**
   ******************************************************************************
   * @file    mx25r6435f_driver.c
-  * @author  MCD Application Team
-  * @version V1.1.0
-  * @date    21-April-2017
   * @brief   This file includes a standard driver for the MX25R6435F QSPI
   *          memory.
-  @verbatim
-  ==============================================================================
-                     ##### How to use this driver #####
-  ==============================================================================
-  [..]
-   (#) This driver is used to drive the MX25R6435F QSPI external
-       memory mounted on STM32L475E IOT01 board.
-
-   (#) This driver need a specific component driver (MX25R6435F) to be included with.
-
-   (#) Initialization steps:
-       (++) Initialize the QPSI external memory using the BSP_QSPI_Init() function. This
-            function includes the MSP layer hardware resources initialization and the
-            QSPI interface with the external memory. The BSP_QSPI_DeInit() can be used
-            to deactivate the QSPI interface.
-
-   (#) QSPI memory operations
-       (++) QSPI memory can be accessed with read/write operations once it is
-            initialized.
-            Read/write operation can be performed with AHB access using the functions
-            BSP_QSPI_Read()/BSP_QSPI_Write().
-       (++) The function to the QSPI memory in memory-mapped mode is possible after
-            the call of the function BSP_QSPI_EnableMemoryMappedMode().
-       (++) The function BSP_QSPI_GetInfo() returns the configuration of the QSPI memory.
-            (see the QSPI memory data sheet)
-       (++) Perform erase block operation using the function BSP_QSPI_Erase_Block() and by
-            specifying the block address. You can perform an erase operation of the whole
-            chip by calling the function BSP_QSPI_Erase_Chip().
-       (++) The function BSP_QSPI_GetStatus() returns the current status of the QSPI memory.
-            (see the QSPI memory data sheet)
-       (++) Perform erase sector operation using the function BSP_QSPI_Erase_Sector()
-            which is not blocking. So the function BSP_QSPI_GetStatus() should be used
-            to check if the memory is busy, and the functions BSP_QSPI_SuspendErase()/
-            BSP_QSPI_ResumeErase() can be used to perform other operations during the
-            sector erase.
-       (++) Deep power down of the QSPI memory is managed with the call of the functions
-            BSP_QSPI_EnterDeepPowerDown()/BSP_QSPI_LeaveDeepPowerDown()
-  @endverbatim
   ******************************************************************************
   * @attention
   *
-  * <h2><center>&copy; COPYRIGHT(c) 2017 STMicroelectronics</center></h2>
+  * <h2><center>&copy; Copyright (c) 2020 STMicroelectronics.
+  * All rights reserved.</center></h2>
   *
-  * Redistribution and use in source and binary forms, with or without modification,
-  * are permitted provided that the following conditions are met:
-  *   1. Redistributions of source code must retain the above copyright notice,
-  *      this list of conditions and the following disclaimer.
-  *   2. Redistributions in binary form must reproduce the above copyright notice,
-  *      this list of conditions and the following disclaimer in the documentation
-  *      and/or other materials provided with the distribution.
-  *   3. Neither the name of STMicroelectronics nor the names of its contributors
-  *      may be used to endorse or promote products derived from this software
-  *      without specific prior written permission.
-  *
-  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-  * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-  * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-  * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-  * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-  * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  * This software component is licensed by ST under BSD 3-Clause license,
+  * the "License"; You may not use this file except in compliance with the
+  * License. You may obtain a copy of the License at:
+  *                        opensource.org/licenses/BSD-3-Clause
   *
   ******************************************************************************
   */
 
 #ifdef __cplusplus
- extern "C" {
+extern "C" {
 #endif
 
 /* Includes ------------------------------------------------------------------*/
 #include "core_debug.h"
 #include "mx25r6435f_driver.h"
 
-/** @addtogroup BSP
-  * @{
-  */
-
-/** @addtogroup STM32L475E_IOT01
-  * @{
-  */
-
-/** @defgroup STM32L475E_IOT01_QSPI QSPI
-  * @{
-  */
-
 /* Private constants --------------------------------------------------------*/
-/** @defgroup STM32L475E_IOT01_QSPI_Private_Constants QSPI Private Constants
-  * @{
-  */
 #define QSPI_QUAD_DISABLE       0x0
 #define QSPI_QUAD_ENABLE        0x1
 
 #define QSPI_HIGH_PERF_DISABLE  0x0
 #define QSPI_HIGH_PERF_ENABLE   0x1
-/**
-  * @}
-  */
-/* Private variables ---------------------------------------------------------*/
-
-/** @defgroup STM32L475E_IOT01_QSPI_Private_Variables QSPI Private Variables
-  * @{
-  */
-
-/**
-  * @}
-  */
-
 
 /* Private functions ---------------------------------------------------------*/
-
-/** @defgroup STM32L475E_IOT01_QSPI_Private_Functions QSPI Private Functions
-  * @{
-  */
-static uint8_t QSPI_ResetMemory        (XSPI_HandleTypeDef *hxspi);
-static uint8_t QSPI_WriteEnable        (XSPI_HandleTypeDef *hxspi);
+static uint8_t QSPI_ResetMemory(XSPI_HandleTypeDef *hxspi);
+static uint8_t QSPI_WriteEnable(XSPI_HandleTypeDef *hxspi);
 static uint8_t QSPI_AutoPollingMemReady(XSPI_HandleTypeDef *hxspi, uint32_t Timeout);
-static uint8_t QSPI_QuadMode           (XSPI_HandleTypeDef *hxspi, uint8_t Operation);
-static uint8_t QSPI_HighPerfMode       (XSPI_HandleTypeDef *hxspi, uint8_t Operation);
-static uint8_t qspi_setClockPrescaler  (void);
-
-/**
-  * @}
-  */
+static uint8_t QSPI_QuadMode(XSPI_HandleTypeDef *hxspi, uint8_t Operation);
+static uint8_t QSPI_HighPerfMode(XSPI_HandleTypeDef *hxspi, uint8_t Operation);
+static uint8_t qspi_setClockPrescaler(void);
 
 /* Exported functions ---------------------------------------------------------*/
-
-/** @addtogroup STM32L475E_IOT01_QSPI_Exported_Functions
-  * @{
-  */
-
 /**
   * @brief  Select a prescaler to have a clock frequency lower than the maximum.
   *         The MX25R6435F supports a maximum frequency of 80MHz.
   *         QSPI clock is connected to AHB bus clock.
   * @retval Clock prescaler. 0 means error.
   */
-static uint8_t qspi_setClockPrescaler(void) {
+static uint8_t qspi_setClockPrescaler(void)
+{
   uint8_t i;
 
-  for(i = 1; i < 255; i++) {
-    if((HAL_RCC_GetHCLKFreq() / i) <= 80000000)
+  for (i = 1; i < 255; i++) {
+    if ((HAL_RCC_GetHCLKFreq() / i) <= 80000000) {
       return i;
+    }
   }
 
   return 0;
@@ -293,7 +197,7 @@ uint8_t BSP_QSPI_DeInit(QSPI_t *obj)
   * @param  Size     : Size of data to read
   * @retval QSPI memory status
   */
-uint8_t BSP_QSPI_Read(QSPI_t *obj, uint8_t* pData, uint32_t ReadAddr, uint32_t Size)
+uint8_t BSP_QSPI_Read(QSPI_t *obj, uint8_t *pData, uint32_t ReadAddr, uint32_t Size)
 {
   XSPI_HandleTypeDef *handle = &(obj->handle);
 #ifdef OCTOSPI
@@ -362,7 +266,7 @@ uint8_t BSP_QSPI_Read(QSPI_t *obj, uint8_t* pData, uint32_t ReadAddr, uint32_t S
   * @param  Size      : Size of data to write
   * @retval QSPI memory status
   */
-uint8_t BSP_QSPI_Write(QSPI_t *obj, uint8_t* pData, uint32_t WriteAddr, uint32_t Size)
+uint8_t BSP_QSPI_Write(QSPI_t *obj, uint8_t *pData, uint32_t WriteAddr, uint32_t Size)
 {
   XSPI_HandleTypeDef *handle = &(obj->handle);
   uint32_t end_addr, current_size, current_addr;
@@ -371,8 +275,7 @@ uint8_t BSP_QSPI_Write(QSPI_t *obj, uint8_t* pData, uint32_t WriteAddr, uint32_t
   current_size = MX25R6435F_PAGE_SIZE - (WriteAddr % MX25R6435F_PAGE_SIZE);
 
   /* Check if the size of the data is less than the remaining place in the page */
-  if (current_size > Size)
-  {
+  if (current_size > Size) {
     current_size = Size;
   }
 
@@ -416,8 +319,7 @@ uint8_t BSP_QSPI_Write(QSPI_t *obj, uint8_t* pData, uint32_t WriteAddr, uint32_t
 #endif /* OCTOSPI */
 
   /* Perform the write page by page */
-  do
-  {
+  do {
     sCommand.Address = current_addr;
     sCommand.NbData  = current_size;
 
@@ -527,8 +429,7 @@ uint8_t BSP_QSPI_Erase_Sector(QSPI_t *obj, uint32_t Sector)
 {
   XSPI_HandleTypeDef *handle = &(obj->handle);
 
-  if (Sector >= (uint32_t)(MX25R6435F_FLASH_SIZE/MX25R6435F_SECTOR_SIZE))
-  {
+  if (Sector >= (uint32_t)(MX25R6435F_FLASH_SIZE / MX25R6435F_SECTOR_SIZE)) {
     return QSPI_ERROR;
   }
 
@@ -695,8 +596,7 @@ uint8_t BSP_QSPI_GetStatus(QSPI_t *obj)
   /* Check the value of the register */
   if ((reg & (MX25R6435F_SECR_P_FAIL | MX25R6435F_SECR_E_FAIL)) != 0) {
     return QSPI_ERROR;
-  }
-  else if ((reg & (MX25R6435F_SECR_PSB | MX25R6435F_SECR_ESB)) != 0) {
+  } else if ((reg & (MX25R6435F_SECR_PSB | MX25R6435F_SECR_ESB)) != 0) {
     return QSPI_SUSPENDED;
   }
 
@@ -726,14 +626,14 @@ uint8_t BSP_QSPI_GetStatus(QSPI_t *obj)
   * @param  pInfo : pointer on the configuration structure
   * @retval QSPI memory status
   */
-uint8_t BSP_QSPI_GetInfo(QSPI_Info* pInfo)
+uint8_t BSP_QSPI_GetInfo(QSPI_Info *pInfo)
 {
   /* Configure the structure with the memory configuration */
   pInfo->FlashSize          = MX25R6435F_FLASH_SIZE;
   pInfo->EraseSectorSize    = MX25R6435F_SECTOR_SIZE;
-  pInfo->EraseSectorsNumber = (MX25R6435F_FLASH_SIZE/MX25R6435F_SECTOR_SIZE);
+  pInfo->EraseSectorsNumber = (MX25R6435F_FLASH_SIZE / MX25R6435F_SECTOR_SIZE);
   pInfo->ProgPageSize       = MX25R6435F_PAGE_SIZE;
-  pInfo->ProgPagesNumber    = (MX25R6435F_FLASH_SIZE/MX25R6435F_PAGE_SIZE);
+  pInfo->ProgPagesNumber    = (MX25R6435F_FLASH_SIZE / MX25R6435F_PAGE_SIZE);
 
   return QSPI_OK;
 }
@@ -834,8 +734,7 @@ uint8_t BSP_QSPI_SuspendErase(QSPI_t *obj)
   /* Check whether the device is busy (erase operation is
   in progress).
   */
-  if (BSP_QSPI_GetStatus(obj) == QSPI_BUSY)
-  {
+  if (BSP_QSPI_GetStatus(obj) == QSPI_BUSY) {
 #ifdef OCTOSPI
     OSPI_RegularCmdTypeDef sCommand;
 
@@ -891,8 +790,7 @@ uint8_t BSP_QSPI_ResumeErase(QSPI_t *obj)
   XSPI_HandleTypeDef *handle = &(obj->handle);
 
   /* Check whether the device is in suspended state */
-  if (BSP_QSPI_GetStatus(obj) == QSPI_SUSPENDED)
-  {
+  if (BSP_QSPI_GetStatus(obj) == QSPI_SUSPENDED) {
 #ifdef OCTOSPI
     OSPI_RegularCmdTypeDef sCommand;
 
@@ -1054,8 +952,8 @@ __weak void BSP_QSPI_MspInit(QSPI_t *obj)
 {
 #ifdef OCTOSPI
 
-    /* Enable the OctoSPI memory interface clock */
-    /* Reset the OctoSPI memory interface */
+  /* Enable the OctoSPI memory interface clock */
+  /* Reset the OctoSPI memory interface */
 #if defined(OCTOSPI1)
   if (obj->qspi == OCTOSPI1) {
     __HAL_RCC_OSPI1_CLK_ENABLE();
@@ -1134,14 +1032,6 @@ __weak void BSP_QSPI_MspDeInit(QSPI_t *obj)
   __HAL_RCC_QSPI_CLK_DISABLE();
 #endif /* OCTOSPI */
 }
-
-/**
-  * @}
-  */
-
-/** @addtogroup STM32L475E_IOT01_QSPI_Private_Functions
-  * @{
-  */
 
 /**
   * @brief  This function reset the QSPI memory.
@@ -1564,22 +1454,6 @@ static uint8_t QSPI_HighPerfMode(XSPI_HandleTypeDef *hxspi, uint8_t Operation)
 
   return QSPI_OK;
 }
-
-/**
-  * @}
-  */
-
-/**
-  * @}
-  */
-
-/**
-  * @}
-  */
-
-/**
-  * @}
-  */
 
 #ifdef __cplusplus
 }

@@ -1,37 +1,18 @@
 /**
   ******************************************************************************
   * @file    mx25r6435f_driver.h
-  * @author  MCD Application Team
-  * @version V1.1.0
-  * @date    21-April-2017
   * @brief   This file contains the common defines and functions prototypes for
   *          the mx25r6435f_driver.c driver.
   ******************************************************************************
   * @attention
   *
-  * <h2><center>&copy; COPYRIGHT(c) 2017 STMicroelectronics</center></h2>
+  * <h2><center>&copy; Copyright (c) 2020 STMicroelectronics.
+  * All rights reserved.</center></h2>
   *
-  * Redistribution and use in source and binary forms, with or without modification,
-  * are permitted provided that the following conditions are met:
-  *   1. Redistributions of source code must retain the above copyright notice,
-  *      this list of conditions and the following disclaimer.
-  *   2. Redistributions in binary form must reproduce the above copyright notice,
-  *      this list of conditions and the following disclaimer in the documentation
-  *      and/or other materials provided with the distribution.
-  *   3. Neither the name of STMicroelectronics nor the names of its contributors
-  *      may be used to endorse or promote products derived from this software
-  *      without specific prior written permission.
-  *
-  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-  * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-  * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-  * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-  * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-  * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  * This software component is licensed by ST under BSD 3-Clause license,
+  * the "License"; You may not use this file except in compliance with the
+  * License. You may obtain a copy of the License at:
+  *                        opensource.org/licenses/BSD-3-Clause
   *
   ******************************************************************************
   */
@@ -41,7 +22,7 @@
 #define _MX25R6435F_DRIVER_H
 
 #ifdef __cplusplus
- extern "C" {
+extern "C" {
 #endif
 
 /* Includes ------------------------------------------------------------------*/
@@ -49,24 +30,7 @@
 #include "PeripheralPins.h"
 #include "mx25r6435f_desc.h"
 
-
-/** @addtogroup BSP
-  * @{
-  */
-
-/** @addtogroup STM32L475E_IOT01
-  * @{
-  */
-
-/** @addtogroup STM32L475E_IOT01_QSPI
-  * @{
-  */
-
 /* Exported constants --------------------------------------------------------*/
-/** @defgroup STM32L475E_IOT01_QSPI_Exported_Constants QSPI Exported Constants
-  * @{
-  */
-
 #if defined(OCTOSPI1) || defined(OCTOSPI2)
 #define OCTOSPI
 #define XSPI_HandleTypeDef  OSPI_HandleTypeDef
@@ -109,14 +73,7 @@
 #define QSPI_NOT_SUPPORTED ((uint8_t)0x04)
 #define QSPI_SUSPENDED     ((uint8_t)0x08)
 
-/**
-  * @}
-  */
-
 /* Exported types ------------------------------------------------------------*/
-/** @defgroup STM32L475E_IOT01_QSPI_Exported_Types QSPI Exported Types
-  * @{
-  */
 /* QSPI Info */
 typedef struct {
   uint32_t FlashSize;          /*!< Size of the flash */
@@ -138,46 +95,24 @@ typedef struct {
   PinName pin_ssel;
 } QSPI_t;
 
-/**
-  * @}
-  */
-
 /* Exported functions --------------------------------------------------------*/
-/** @defgroup STM32L475E_IOT01_QSPI_Exported_Functions QSPI Exported Functions
-  * @{
-  */
-uint8_t BSP_QSPI_Init                  (QSPI_t *obj);
-uint8_t BSP_QSPI_DeInit                (QSPI_t *obj);
-uint8_t BSP_QSPI_Read                  (QSPI_t *obj, uint8_t* pData, uint32_t ReadAddr, uint32_t Size);
-uint8_t BSP_QSPI_Write                 (QSPI_t *obj, uint8_t* pData, uint32_t WriteAddr, uint32_t Size);
-uint8_t BSP_QSPI_Erase_Block           (QSPI_t *obj, uint32_t BlockAddress);
-uint8_t BSP_QSPI_Erase_Sector          (QSPI_t *obj, uint32_t Sector);
-uint8_t BSP_QSPI_Erase_Chip            (QSPI_t *obj);
-uint8_t BSP_QSPI_GetStatus             (QSPI_t *obj);
-uint8_t BSP_QSPI_GetInfo               (QSPI_Info* pInfo);
+uint8_t BSP_QSPI_Init(QSPI_t *obj);
+uint8_t BSP_QSPI_DeInit(QSPI_t *obj);
+uint8_t BSP_QSPI_Read(QSPI_t *obj, uint8_t *pData, uint32_t ReadAddr, uint32_t Size);
+uint8_t BSP_QSPI_Write(QSPI_t *obj, uint8_t *pData, uint32_t WriteAddr, uint32_t Size);
+uint8_t BSP_QSPI_Erase_Block(QSPI_t *obj, uint32_t BlockAddress);
+uint8_t BSP_QSPI_Erase_Sector(QSPI_t *obj, uint32_t Sector);
+uint8_t BSP_QSPI_Erase_Chip(QSPI_t *obj);
+uint8_t BSP_QSPI_GetStatus(QSPI_t *obj);
+uint8_t BSP_QSPI_GetInfo(QSPI_Info *pInfo);
 uint8_t BSP_QSPI_EnableMemoryMappedMode(QSPI_t *obj);
-uint8_t BSP_QSPI_SuspendErase          (QSPI_t *obj);
-uint8_t BSP_QSPI_ResumeErase           (QSPI_t *obj);
-uint8_t BSP_QSPI_EnterDeepPowerDown    (QSPI_t *obj);
-uint8_t BSP_QSPI_LeaveDeepPowerDown    (QSPI_t *obj);
+uint8_t BSP_QSPI_SuspendErase(QSPI_t *obj);
+uint8_t BSP_QSPI_ResumeErase(QSPI_t *obj);
+uint8_t BSP_QSPI_EnterDeepPowerDown(QSPI_t *obj);
+uint8_t BSP_QSPI_LeaveDeepPowerDown(QSPI_t *obj);
 
 void BSP_QSPI_MspInit(QSPI_t *obj);
 void BSP_QSPI_MspDeInit(QSPI_t *obj);
-/**
-  * @}
-  */
-
-/**
-  * @}
-  */
-
-/**
-  * @}
-  */
-
-/**
-  * @}
-  */
 
 #ifdef __cplusplus
 }

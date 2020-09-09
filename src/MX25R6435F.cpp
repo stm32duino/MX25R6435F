@@ -9,29 +9,13 @@
   ******************************************************************************
   * @attention
   *
-  * <h2><center>&copy; COPYRIGHT(c) 2017 STMicroelectronics</center></h2>
+  * <h2><center>&copy; Copyright (c) 2020 STMicroelectronics.
+  * All rights reserved.</center></h2>
   *
-  * Redistribution and use in source and binary forms, with or without modification,
-  * are permitted provided that the following conditions are met:
-  *   1. Redistributions of source code must retain the above copyright notice,
-  *      this list of conditions and the following disclaimer.
-  *   2. Redistributions in binary form must reproduce the above copyright notice,
-  *      this list of conditions and the following disclaimer in the documentation
-  *      and/or other materials provided with the distribution.
-  *   3. Neither the name of STMicroelectronics nor the names of its contributors
-  *      may be used to endorse or promote products derived from this software
-  *      without specific prior written permission.
-  *
-  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-  * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-  * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-  * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-  * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-  * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  * This software component is licensed by ST under BSD 3-Clause license,
+  * the "License"; You may not use this file except in compliance with the
+  * License. You may obtain a copy of the License at:
+  *                        opensource.org/licenses/BSD-3-Clause
   *
   ******************************************************************************
   */
@@ -55,6 +39,7 @@ void MX25R6435FClass::begin(uint8_t data0, uint8_t data1, uint8_t data2, uint8_t
 
   if (BSP_QSPI_Init(&_qspi) == MEMORY_OK) {
     initDone = 1;
+  }
 }
 
 void MX25R6435FClass::end(void)
@@ -70,11 +55,13 @@ uint32_t MX25R6435FClass::write(uint8_t data, uint32_t addr)
 
 uint32_t MX25R6435FClass::write(uint8_t *pData, uint32_t addr, uint32_t size)
 {
-  if((pData == NULL) || (initDone == 0))
+  if ((pData == NULL) || (initDone == 0)) {
     return 0;
+  }
 
-  if(BSP_QSPI_Write(&_qspi, pData, addr, size) != MEMORY_OK)
+  if (BSP_QSPI_Write(&_qspi, pData, addr, size) != MEMORY_OK) {
     return 0;
+  }
 
   return size;
 }
@@ -90,70 +77,79 @@ uint8_t MX25R6435FClass::read(uint32_t addr)
 
 void MX25R6435FClass::read(uint8_t *pData, uint32_t addr, uint32_t size)
 {
-  if((pData != NULL) && (initDone == 1))
+  if ((pData != NULL) && (initDone == 1)) {
     BSP_QSPI_Read(&_qspi, pData, addr, size);
+  }
 }
 
 uint8_t *MX25R6435FClass::mapped(void)
 {
-  if(BSP_QSPI_EnableMemoryMappedMode(&_qspi) != MEMORY_OK)
+  if (BSP_QSPI_EnableMemoryMappedMode(&_qspi) != MEMORY_OK) {
     return NULL;
+  }
 
   return (uint8_t *)MEMORY_MAPPED_ADDRESS;
 }
 
 uint8_t MX25R6435FClass::erase(uint32_t addr)
 {
-  if(initDone == 0)
+  if (initDone == 0) {
     return MEMORY_ERROR;
+  }
 
   return BSP_QSPI_Erase_Block(&_qspi, addr);
 }
 
 uint8_t MX25R6435FClass::eraseChip(void)
 {
-  if(initDone == 0)
+  if (initDone == 0) {
     return MEMORY_ERROR;
+  }
 
   return BSP_QSPI_Erase_Chip(&_qspi);
 }
 
 uint8_t MX25R6435FClass::eraseSector(uint32_t sector)
 {
-  if(initDone == 0)
+  if (initDone == 0) {
     return MEMORY_ERROR;
+  }
 
   return BSP_QSPI_Erase_Sector(&_qspi, sector);
 }
 
 uint8_t MX25R6435FClass::suspendErase(void)
 {
-  if(initDone == 0)
+  if (initDone == 0) {
     return MEMORY_ERROR;
+  }
 
   return BSP_QSPI_SuspendErase(&_qspi);
 }
 
 uint8_t MX25R6435FClass::resumeErase(void)
 {
-  if(initDone == 0)
+  if (initDone == 0) {
     return MEMORY_ERROR;
+  }
 
   return BSP_QSPI_ResumeErase(&_qspi);
 }
 
 uint8_t MX25R6435FClass::sleep(void)
 {
-  if(initDone == 0)
+  if (initDone == 0) {
     return MEMORY_ERROR;
+  }
 
   return BSP_QSPI_EnterDeepPowerDown(&_qspi);
 }
 
 uint8_t MX25R6435FClass::wakeup(void)
 {
-  if(initDone == 0)
+  if (initDone == 0) {
     return MEMORY_ERROR;
+  }
 
   return BSP_QSPI_LeaveDeepPowerDown(&_qspi);
 }
@@ -170,30 +166,30 @@ uint32_t MX25R6435FClass::info(memory_info_t info)
 
   BSP_QSPI_GetInfo(&pInfo);
 
-  switch(info){
+  switch (info) {
     case MEMORY_SIZE:
       res = pInfo.FlashSize;
-    break;
+      break;
 
     case MEMORY_SECTOR_SIZE:
       res = pInfo.EraseSectorSize;
-    break;
+      break;
 
     case MEMORY_SECTOR_NUMBER:
       res = pInfo.EraseSectorsNumber;
-    break;
+      break;
 
     case MEMORY_PAGE_SIZE:
       res = pInfo.ProgPageSize;
-    break;
+      break;
 
     case MEMORY_PAGE_NUMBER:
       res = pInfo.ProgPagesNumber;
-    break;
+      break;
 
     default:
       res = 0;
-    break;
+      break;
   }
 
   return res;
