@@ -50,12 +50,22 @@ extern "C" {
 #elif defined(QUADSPI)
 #define XSPI_HandleTypeDef  QSPI_HandleTypeDef
 #define XSPI_TypeDef        QUADSPI_TypeDef
+
+#if defined(STM32_CORE_VERSION) && (STM32_CORE_VERSION  > 0x01090000)
 #define PinMap_XSPI_DATA0   PinMap_QUADSPI_DATA0
 #define PinMap_XSPI_DATA1   PinMap_QUADSPI_DATA1
 #define PinMap_XSPI_DATA2   PinMap_QUADSPI_DATA2
 #define PinMap_XSPI_DATA3   PinMap_QUADSPI_DATA3
 #define PinMap_XSPI_SCLK    PinMap_QUADSPI_SCLK
 #define PinMap_XSPI_SSEL    PinMap_QUADSPI_SSEL
+#else
+#define PinMap_XSPI_DATA0   PinMap_QUADSPI
+#define PinMap_XSPI_DATA1   PinMap_QUADSPI
+#define PinMap_XSPI_DATA2   PinMap_QUADSPI
+#define PinMap_XSPI_DATA3   PinMap_QUADSPI
+#define PinMap_XSPI_SCLK    PinMap_QUADSPI
+#define PinMap_XSPI_SSEL    PinMap_QUADSPI
+#endif
 #define HAL_XSPI_Init       HAL_QSPI_Init
 #define HAL_XSPI_DeInit     HAL_QSPI_DeInit
 #define HAL_XSPI_TIMEOUT_DEFAULT_VALUE HAL_QPSI_TIMEOUT_DEFAULT_VALUE

@@ -23,23 +23,27 @@
 #include "Arduino.h"
 #include "mx25r6435f_driver.h"
 
+/*
+ * For backward compatibility define the xSPI pins used by:
+ * B-L475E-IOT01A and B-L4S5I-IOT01A
+ */
 #ifndef MX25R6435F_D0
-  #define MX25R6435F_D0           NC
+  #define MX25R6435F_D0           PE12
 #endif
 #ifndef MX25R6435F_D1
-  #define MX25R6435F_D1           NC
+  #define MX25R6435F_D1           PE13
 #endif
 #ifndef MX25R6435F_D2
-  #define MX25R6435F_D2           NC
+  #define MX25R6435F_D2           PE14
 #endif
 #ifndef MX25R6435F_D3
-  #define MX25R6435F_D3           NC
+  #define MX25R6435F_D3           PE15
 #endif
 #ifndef MX25R6435F_SCLK
-  #define MX25R6435F_SCLK         NC
+  #define MX25R6435F_SCLK         PE10
 #endif
 #ifndef MX25R6435F_SSEL
-  #define MX25R6435F_SSEL         NC
+  #define MX25R6435F_SSEL         PE11
 #endif
 
 /* Memory configuration paremeters */
