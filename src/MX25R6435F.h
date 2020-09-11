@@ -1,37 +1,18 @@
 /**
   ******************************************************************************
   * @file    MX25R6435F.h
-  * @author  WI6LABS
-  * @version V1.0.0
-  * @date    19-July-2017
   * @brief   MX25R6435F library for STM32 Arduino
   *
   ******************************************************************************
   * @attention
   *
-  * <h2><center>&copy; COPYRIGHT(c) 2017 STMicroelectronics</center></h2>
+  * <h2><center>&copy; Copyright (c) 2020 STMicroelectronics.
+  * All rights reserved.</center></h2>
   *
-  * Redistribution and use in source and binary forms, with or without modification,
-  * are permitted provided that the following conditions are met:
-  *   1. Redistributions of source code must retain the above copyright notice,
-  *      this list of conditions and the following disclaimer.
-  *   2. Redistributions in binary form must reproduce the above copyright notice,
-  *      this list of conditions and the following disclaimer in the documentation
-  *      and/or other materials provided with the distribution.
-  *   3. Neither the name of STMicroelectronics nor the names of its contributors
-  *      may be used to endorse or promote products derived from this software
-  *      without specific prior written permission.
-  *
-  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-  * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-  * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-  * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-  * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-  * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  * This software component is licensed by ST under BSD 3-Clause license,
+  * the "License"; You may not use this file except in compliance with the
+  * License. You may obtain a copy of the License at:
+  *                        opensource.org/licenses/BSD-3-Clause
   *
   ******************************************************************************
   */
@@ -39,7 +20,31 @@
 #ifndef _MX25R6435F_H_
 #define _MX25R6435F_H_
 
+#include "Arduino.h"
 #include "mx25r6435f_driver.h"
+
+/*
+ * For backward compatibility define the xSPI pins used by:
+ * B-L475E-IOT01A and B-L4S5I-IOT01A
+ */
+#ifndef MX25R6435F_D0
+  #define MX25R6435F_D0           PE12
+#endif
+#ifndef MX25R6435F_D1
+  #define MX25R6435F_D1           PE13
+#endif
+#ifndef MX25R6435F_D2
+  #define MX25R6435F_D2           PE14
+#endif
+#ifndef MX25R6435F_D3
+  #define MX25R6435F_D3           PE15
+#endif
+#ifndef MX25R6435F_SCLK
+  #define MX25R6435F_SCLK         PE10
+#endif
+#ifndef MX25R6435F_SSEL
+  #define MX25R6435F_SSEL         PE11
+#endif
 
 /* Memory configuration paremeters */
 typedef enum {
@@ -60,13 +65,45 @@ typedef enum {
 /* Base address of the memory in mapped mode */
 #define MEMORY_MAPPED_ADDRESS ((uint32_t)0x90000000)
 
-class MX25R6435FClass
-{
+class MX25R6435FClass {
   public:
     MX25R6435FClass();
 
+    // setDx/SCLK/SSEL have to be called before begin()
+    void setDx(uint32_t data0, uint32_t data1, uint32_t data2, uint32_t data3)
+    {
+      _qspi.pin_d0 = digitalPinToPinName(data0);
+      _qspi.pin_d1 = digitalPinToPinName(data1);
+      _qspi.pin_d2 = digitalPinToPinName(data2);
+      _qspi.pin_d3 = digitalPinToPinName(data3);
+    };
+    void setSCLK(uint32_t sclk)
+    {
+      _qspi.pin_sclk = digitalPinToPinName(sclk);
+    };
+    void setSSEL(uint32_t ssel)
+    {
+      _qspi.pin_ssel = digitalPinToPinName(ssel);
+    };
+
+    void setDx(PinName data0, PinName data1, PinName data2, PinName data3)
+    {
+      _qspi.pin_d0 = (data0);
+      _qspi.pin_d1 = (data1);
+      _qspi.pin_d2 = (data2);
+      _qspi.pin_d3 = (data3);
+    };
+    void setSCLK(PinName sclk)
+    {
+      _qspi.pin_sclk = (sclk);
+    };
+    void setSSEL(PinName ssel)
+    {
+      _qspi.pin_ssel = (ssel);
+    };
+
     /* Initializes the memory interface. */
-    void begin(void);
+    void begin(uint8_t data0 = MX25R6435F_D0, uint8_t data1 = MX25R6435F_D1, uint8_t data2 = MX25R6435F_D2, uint8_t data3 = MX25R6435F_D3, uint8_t sclk = MX25R6435F_SCLK, uint8_t ssel = MX25R6435F_SSEL);
 
     /* De-Initializes the memory interface. */
     void end(void);
@@ -174,6 +211,7 @@ class MX25R6435FClass
 
   private:
     uint8_t initDone;
+    QSPI_t _qspi;
 };
 
 extern MX25R6435FClass MX25R6435F;
