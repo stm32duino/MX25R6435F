@@ -40,7 +40,11 @@ extern "C" {
 #define PinMap_XSPI_DATA2   PinMap_OCTOSPI_DATA2
 #define PinMap_XSPI_DATA3   PinMap_OCTOSPI_DATA3
 #define PinMap_XSPI_SCLK    PinMap_OCTOSPI_SCLK
-#define PinMap_XSPI_SSEL    PinMap_OCTOSPI_SSEL
+#if defined(STM32_CORE_VERSION) && (STM32_CORE_VERSION  > 0x03000000)
+#define PinMap_XSPI_NCS1    PinMap_OCTOSPI_NCS1
+#else
+#define PinMap_XSPI_NCS1    PinMap_OCTOSPI_SSEL
+#endif
 #define HAL_XSPI_Init       HAL_OSPI_Init
 #define HAL_XSPI_DeInit     HAL_OSPI_DeInit
 #define HAL_XSPI_TIMEOUT_DEFAULT_VALUE HAL_OSPI_TIMEOUT_DEFAULT_VALUE
@@ -51,20 +55,27 @@ extern "C" {
 #define XSPI_HandleTypeDef  QSPI_HandleTypeDef
 #define XSPI_TypeDef        QUADSPI_TypeDef
 
-#if defined(STM32_CORE_VERSION) && (STM32_CORE_VERSION  > 0x01090000)
+#if defined(STM32_CORE_VERSION) && (STM32_CORE_VERSION  > 0x03000000)
 #define PinMap_XSPI_DATA0   PinMap_QUADSPI_DATA0
 #define PinMap_XSPI_DATA1   PinMap_QUADSPI_DATA1
 #define PinMap_XSPI_DATA2   PinMap_QUADSPI_DATA2
 #define PinMap_XSPI_DATA3   PinMap_QUADSPI_DATA3
 #define PinMap_XSPI_SCLK    PinMap_QUADSPI_SCLK
-#define PinMap_XSPI_SSEL    PinMap_QUADSPI_SSEL
+#define PinMap_XSPI_NCS1    PinMap_QUADSPI_NCS1
+#elif defined(STM32_CORE_VERSION) && (STM32_CORE_VERSION  > 0x01090000)
+#define PinMap_XSPI_DATA0   PinMap_QUADSPI_DATA0
+#define PinMap_XSPI_DATA1   PinMap_QUADSPI_DATA1
+#define PinMap_XSPI_DATA2   PinMap_QUADSPI_DATA2
+#define PinMap_XSPI_DATA3   PinMap_QUADSPI_DATA3
+#define PinMap_XSPI_SCLK    PinMap_QUADSPI_SCLK
+#define PinMap_XSPI_NCS1    PinMap_QUADSPI_SSEL
 #else
 #define PinMap_XSPI_DATA0   PinMap_QUADSPI
 #define PinMap_XSPI_DATA1   PinMap_QUADSPI
 #define PinMap_XSPI_DATA2   PinMap_QUADSPI
 #define PinMap_XSPI_DATA3   PinMap_QUADSPI
 #define PinMap_XSPI_SCLK    PinMap_QUADSPI
-#define PinMap_XSPI_SSEL    PinMap_QUADSPI
+#define PinMap_XSPI_NCS1    PinMap_QUADSPI
 #endif
 #define HAL_XSPI_Init       HAL_QSPI_Init
 #define HAL_XSPI_DeInit     HAL_QSPI_DeInit
