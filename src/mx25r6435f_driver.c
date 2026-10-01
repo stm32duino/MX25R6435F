@@ -79,10 +79,10 @@ uint8_t BSP_QSPI_Init(QSPI_t *obj)
   XSPI_TypeDef *xspi_d3 = pinmap_peripheral(obj->pin_d3, PinMap_XSPI_DATA3);
 
   XSPI_TypeDef *xspi_sclk = pinmap_peripheral(obj->pin_sclk, PinMap_XSPI_SCLK);
-  XSPI_TypeDef *xspi_ssel = pinmap_peripheral(obj->pin_ssel, PinMap_XSPI_SSEL);
+  XSPI_TypeDef *xspi_ncs1 = pinmap_peripheral(obj->pin_ssel, PinMap_XSPI_NCS1);
 
   /* Pins Dx/SSEL/SCLK must not be NP. */
-  if (xspi_d0 == NP || xspi_d1 == NP || xspi_d2 == NP || xspi_sclk == NP || xspi_ssel == NP) {
+  if (xspi_d0 == NP || xspi_d1 == NP || xspi_d2 == NP || xspi_d3 == NP || xspi_sclk == NP || xspi_ncs1 == NP) {
     core_debug("ERROR: at least one QSPI pin has no peripheral\n");
     return QSPI_ERROR;
   }
@@ -90,7 +90,7 @@ uint8_t BSP_QSPI_Init(QSPI_t *obj)
   XSPI_TypeDef *spi_d01 = pinmap_merge_peripheral(xspi_d0, xspi_d1);
   XSPI_TypeDef *spi_d23 = pinmap_merge_peripheral(xspi_d2, xspi_d3);
   XSPI_TypeDef *spi_dx = pinmap_merge_peripheral(spi_d01, spi_d23);
-  XSPI_TypeDef *spi_sxxx = pinmap_merge_peripheral(xspi_sclk, xspi_ssel);
+  XSPI_TypeDef *spi_sxxx = pinmap_merge_peripheral(xspi_sclk, xspi_ncs1);
 
   obj->qspi = pinmap_merge_peripheral(spi_dx, spi_sxxx);
 
@@ -985,7 +985,7 @@ __weak void BSP_QSPI_MspInit(QSPI_t *obj)
   pinmap_pinout(obj->pin_d2, PinMap_XSPI_DATA2);
   pinmap_pinout(obj->pin_d3, PinMap_XSPI_DATA3);
   pinmap_pinout(obj->pin_sclk, PinMap_XSPI_SCLK);
-  pinmap_pinout(obj->pin_ssel, PinMap_XSPI_SSEL);
+  pinmap_pinout(obj->pin_ssel, PinMap_XSPI_NCS1);
 }
 
 /**
